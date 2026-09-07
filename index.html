@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en" data-astryx-theme="neutral">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gooo - Meaning, made executable</title>
+  <meta name="description" content="An experimental language connecting declared intent, generated Go, and verifiable evidence.">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@astryxdesign/core@0.4.1/src/reset.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@astryxdesign/core@0.4.1/dist/astryx.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@astryxdesign/theme-neutral@0.4.1/dist/theme.css">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">{"imports":{"react":"https://esm.sh/react@19.2.0","react/jsx-runtime":"https://esm.sh/react@19.2.0/jsx-runtime","react-dom":"https://esm.sh/react-dom@19.2.0","react-dom/client":"https://esm.sh/react-dom@19.2.0/client","@astryxdesign/core":"https://esm.sh/@astryxdesign/core@0.4.1?external=react,react-dom"}}</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header><nav class="wrap" aria-label="Main navigation"><a class="brand" href="index.html">Gooo<span> / language</span></a><div class="navlinks"><a href="learn.html">Learn</a><a href="language.html">Language</a><a href="evidence.html">Evidence</a><a href="https://github.com/kimjooyoon/meta-ontology-go">Source <span aria-hidden="true">↗</span></a></div></nav></header>
+<main id="main">
+<section class="hero"><div class="wrap hero-grid"><div><p class="eyebrow">DECLARATION → GENERATION → EVIDENCE</p><h1>Meaning,<br>made executable.</h1><p class="lede">Describe what a system means.<br>Connect it to the code it produces.<br>Keep the evidence of what actually happened.</p><div class="actions"><a class="button primary" href="learn.html">Start with Gooo</a><a class="button" href="language.html">Explore the language →</a></div><p class="small">Experimental. Go-backed. Open source.<br>Not a replacement for Go. Not a claim of autonomous correctness.</p></div><div class="code-window"><div class="window-heading"><span class="file-label">observation.gooo</span><span class="tag">DECLARED INTENT</span></div><pre><code><span class="keyword">package</span> registrationfixture
+<span class="keyword">namespace</span> registrationfixture
+
+<span class="keyword">entity</span> Observation
+  <span class="keyword">id</span> "gooo://registration-fixture/observation"
+  <span class="keyword">fields</span> {
+    <span class="keyword">field</span> State
+      <span class="keyword">id</span> "gooo://registration-fixture/state"
+      <span class="keyword">type</span> string <span class="keyword">required one</span>
+  }
+
+<span class="keyword">activity</span> Capture(Observation)
+  → Observation
+  <span class="keyword">computes</span> "record.forward:v1"</code></pre><p class="code-caption">A readable presentation of a compiler test fixture.<br>The arrow above is notation, not copy-ready syntax.</p></div></div></section>
+<section class="wrap section"><div class="section-title"><p class="eyebrow">A SMALLER DISTANCE BETWEEN WHY AND WHAT</p><h2>Code is an output.<br>Meaning is the starting point.</h2></div><div class="three-columns"><article><span class="number">01 / DECLARE</span><h3>Make intent explicit</h3><p>Entities describe things. Activities describe transformations. Agents describe who acts. Stable identities connect them.</p><a href="language.html#model">The semantic model →</a></article><article><span class="number">02 / GENERATE</span><h3>Produce derived code</h3><p>The compiler lowers declarations into a semantic representation, then generates Go within explicit boundaries.</p><a href="language.html#generation">Generation boundaries →</a></article><article><span class="number">03 / OBSERVE</span><h3>Keep claims accountable</h3><p>Receipts bind observations to inputs and operations. Missing evidence stays unknown. Known counterexamples stay visible.</p><a href="evidence.html#states">Reading the evidence →</a></article></div></section>
+<section class="tinted"><div class="wrap section story"><div><p class="eyebrow">SELF-IMPROVEMENT, WITHOUT SELF-CERTIFICATION</p><h2>A compiler that can propose<br>changes to its own system.</h2><p>Gooo has bounded execution paths for code transformations and coordinated syntax registration. A generated candidate is not permission to apply it.</p><a href="evidence.html">See what is implemented →</a></div><ol class="pipeline"><li><strong>Declared operation</strong><span>Exact input, scope, and identity</span></li><li><strong>Generated candidate</strong><span>Changes in a temporary workspace</span></li><li><strong>Native verification</strong><span>Tests, replay, and counterexamples</span></li><li><strong>Scoped decision</strong><span>Evidence first. Authority separately.</span></li></ol></div></section>
+<section class="wrap section"><div class="status-grid"><div><p class="eyebrow">AN HONEST STARTING POINT</p><h2>Useful experiments.<br>Visible limits.</h2><p>Development-branch capabilities are not automatically available in a published release. We report exact cases, not a percentage of language completeness.</p><a href="https://github.com/kimjooyoon/meta-ontology-go/releases">Browse releases →</a></div><aside id="astryx-status" aria-label="Project maturity"><h3>Experimental by design</h3><p>External utility and comparative improvement remain unproven unless evidence is provided.</p><a href="evidence.html">Read the status and boundaries</a></aside></div></section>
+</main><footer><div class="wrap"><a class="brand" href="index.html">Gooo</a><p>A language for explicit meaning and inspectable evidence.</p><a href="https://github.com/kimjooyoon/gooo-site">Improve this site</a><span>Built with Astryx. Static HTML. No tracking.</span></div></footer>
+<script type="module" src="astryx.mjs"></script>
+</body></html>
