@@ -49,6 +49,47 @@ jobs:
           go test -mod=readonly ./cmd/metric-atlas-export
       - name: Render source-backed map and record collection scope
         run: node scripts/atlas/render.mjs atlas-output/catalog.json scripts/atlas/template.html atlas-output/metric-map.html upstream
+      - name: Verify pinned release metric formula bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          catalog=atlas-output/catalog.json
+          receipt=atlas-output/metric-map.html.receipt.json
+          test "$(jq -r '.release_metric_contracts.schema' "$catalog")" = gooo/source-release-metric-contracts/v1
+          test "$(jq -r '.release_metric_contracts.source_sha' "$catalog")" = "$ATLAS_SOURCE_SHA"
+          test "$(jq '.release_metric_contracts.source_files | length' "$catalog")" -eq 6
+          test "$(jq '.release_metric_contracts.metric_count' "$catalog")" -eq 39
+          test "$(jq '.release_metric_contracts.contracts | length' "$catalog")" -eq 39
+          test "$(jq '.release_metric_contracts.unknowns | length' "$catalog")" -eq 0
+          test "$(jq '.release_metric_contracts.class_counts.OUTCOME' "$catalog")" -eq 3
+          test "$(jq '.release_metric_contracts.class_counts.DRIVER' "$catalog")" -eq 16
+          test "$(jq '.release_metric_contracts.class_counts.GUARDRAIL' "$catalog")" -eq 20
+          jq -e '.release_metric_contracts.contracts | all((.metric_id | type == "string" and length > 0) and (.class | IN("OUTCOME","DRIVER","GUARDRAIL")) and (.proof_choice | IN("FOUNDATION","COHERENCE","REGRESSION")) and (.owner_function | type == "string" and length > 0) and (.constructor == "indicator") and (.helper.path == "internal/meta/languagereadiness/toolchainrelease/indicator_helper.go") and (.helper.kind == "release_indicator_constructor_definition") and (.helper_signature | startswith("func indicator(")) and (.helper_result_fields.MetricID == "id") and (.helper_result_fields.Class == "class") and (.helper_result_fields.ProofChoice == "proof") and (.helper_result_fields.Value == "value") and (.helper_result_fields.Target == "target") and (.helper_result_fields.Relation == "relation") and (.formula_complete | type == "boolean") and (.call.path | type == "string" and length > 0) and ([.formula.actual,.formula.expected,.formula.comparator,.formula.unit,.formula.proof] | all((.expression | type == "string" and length > 0) and (.reference.path | type == "string" and length > 0) and (.reference.line | type == "number" and . >= 1))) and (.formula.unit.resolution == "UNDECLARED_IN_SOURCE"))' "$catalog" >/dev/null
+          jq -e '([.release_metric_contracts.contracts[].metric_id] | unique | length) == 39 and ([.release_metric_contracts.contracts[].metric_id] | sort) == ([.release_metric_contracts.metric_ids[]] | sort)' "$catalog" >/dev/null
+          jq -e '([.release_metric_contracts.contracts[] | select(.class == "OUTCOME")] | sort_by(.call.line) | .[0:2] | map(.formula.actual.expression)) == ["summary.ReadinessBPS","summary.ReadinessBPS"]' "$catalog" >/dev/null
+          jq -e '([.release_metric_contracts.contracts[] | select(.class == "OUTCOME")] | sort_by(.call.line) | .[0].metric_id) != ([.release_metric_contracts.contracts[] | select(.class == "OUTCOME")] | sort_by(.call.line) | .[1].metric_id)' "$catalog" >/dev/null
+          test "$(jq '[.release_metric_contracts.contracts[] | select(.formula.actual.resolved_reference.path | length > 0)] | length' "$catalog")" -eq 36
+          test "$(jq '[.release_metric_contracts.contracts[] | select(.formula.expected.resolved_reference.path | length > 0)] | length' "$catalog")" -eq 16
+          jq -e '[.release_metric_contracts.contracts[] | select(.formula.actual.expression == "values[index]") | select((.formula.actual.resolved_expression | type == "string" and length > 0) and (.formula.actual.resolved_reference.path | type == "string" and length > 0))] | length == 36' "$catalog" >/dev/null
+          jq -e '[.release_metric_contracts.contracts[] | select(.formula.expected.expression == "targets[index]") | select((.formula.expected.resolved_expression | type == "string" and length > 0) and (.formula.expected.resolved_reference.path | type == "string" and length > 0))] | length == 16' "$catalog" >/dev/null
+          jq -e '.release_metric_contracts.contracts | map(select(.metric_id == "gooo.metric.toolchain.cross-platform-release-proof-readiness-bps.v1")) | if length == 1 then .[0] else error("proof readiness contract missing or duplicated") end | select(.formula.actual.expression == "proofBPS" and .formula.actual.resolution == "CONTROL_FLOW_DEPENDENT_UNKNOWN" and (.formula.actual.alternatives | length) == 2 and .formula_complete == false)' "$catalog" >/dev/null
+          test "$(jq -r '.release_metric_cohort.source_sha' "$receipt")" = "$ATLAS_SOURCE_SHA"
+          test "$(jq '.release_metric_cohort.contract_count' "$receipt")" -eq 39
+          test "$(jq '.release_metric_cohort.metric_count' "$receipt")" -eq 39
+          test "$(jq '.release_metric_cohort.unknown_count' "$receipt")" -eq 0
+          test "$(jq '.release_metric_cohort.owner_count' "$receipt")" -eq 39
+          test "$(jq '.release_metric_cohort.complete_formula_count' "$receipt")" -eq 38
+          test "$(jq '.release_metric_cohort.all_formula_fields_present' "$receipt")" = true
+          test "$(jq -r '.release_metric_binding_validation.state' "$receipt")" = UNKNOWN
+          test "$(jq -r '.native_evidence.binding.contract.state' "$receipt")" = UNKNOWN
+          test "$(jq '.native_evidence.binding.contract.metric_count' "$receipt")" -eq 39
+          test "$(jq '.native_evidence.binding.contract.owner_count' "$receipt")" -eq 39
+          test "$(jq '.native_evidence.binding.contract.source_contract_count' "$receipt")" -eq 39
+          test "$(jq '.native_evidence.binding.contract.complete_formula_count' "$receipt")" -eq 38
+          test "$(jq -r '.native_evidence.binding.contract.binding_scope' "$receipt")" = SOURCE_FORMULA_ONLY_NOT_RUNTIME_EVIDENCE
+          test "$(jq -r '.native_evidence.ingestion_state' "$receipt")" = UNKNOWN
+          test "$(jq -r '.native_evidence.binding.activity.state' "$receipt")" = UNKNOWN
+          node scripts/atlas/release-metric-binding-cases.mjs "$receipt" "$catalog" | tee "$RUNNER_TEMP/release-metric-binding-cases.json"
       - name: Verify source field guide vocabulary and unknown-field handling
         shell: bash
         run: |
@@ -127,6 +168,7 @@ jobs:
             cat "$RUNNER_TEMP/native-evidence-cases.json"
             cat "$RUNNER_TEMP/translation-cohort-cases.json"
             cat "$RUNNER_TEMP/translation-source-reference-cases.json"
+            cat "$RUNNER_TEMP/release-metric-binding-cases.json"
             echo
             echo 'AST fixture test: executed against collectContracts in the disposable upstream source copy'
           } >> "$GITHUB_STEP_SUMMARY"

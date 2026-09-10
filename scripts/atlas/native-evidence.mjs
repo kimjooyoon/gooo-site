@@ -1,3 +1,5 @@
+import {validateReleaseMetricBindings,releaseBindingUnknown} from './release-metric-validator.mjs';
+
 const unknownBinding=(stage,step,reason,next_operation)=>({state:'UNKNOWN',stage,step,reason,unknown_class:'DIRECT_MISSING',next_operation,blocked_by:[]});
 
 export function bindNativeEvidence(atlas,evidence){
@@ -11,9 +13,10 @@ export function bindNativeEvidence(atlas,evidence){
   if(!activityCandidates.length)activity.reason='NO_EXACT_LEXICAL_GOOO_ACTIVITY_BINDING_IN_SOURCE_CATALOG';
   else if(activityCandidates.length>1)activity.reason='MULTIPLE_LEXICAL_ACTIVITIES_MATCH_SOURCE_BINDING';
   const metricIDs=concept?.metric_bindings??[];
-  const contracts=(atlas.source_contracts?.calls??[]).filter(contract=>metricIDs.includes(contract.metric_id));
-  const missingMetricIDs=metricIDs.filter(id=>!contracts.some(contract=>contract.metric_id===id));
-  const contract=metricIDs.length>0&&missingMetricIDs.length===0?{state:'SOURCE_BOUND',stage:'SOURCE_CONTRACT_BINDING',step:'EXACT_RELEASE_METRIC_CONTRACTS',metric_count:metricIDs.length,source_contract_count:contracts.length}:{...unknownBinding('SOURCE_CONTRACT_BINDING','EXACT_RELEASE_METRIC_CONTRACTS','NATIVE_RELEASE_METRIC_CONTRACT_BINDING_INCOMPLETE','EXPORT_OR_BIND_EACH_RELEASE_METRIC_CONTRACT'),metric_count:metricIDs.length,source_contract_count:contracts.length,missing_metric_ids:missingMetricIDs};
+  const releaseContracts=atlas.release_metric_contracts?.contracts??[];
+  const contractValidation=metricIDs.length?validateReleaseMetricBindings(atlas,metricIDs,evidence.source_head_sha):releaseBindingUnknown('NATIVE_RELEASE_METRIC_ID_COHORT_MISSING','BIND_RELEASE_METRIC_COHORT_FROM_SOURCE_CONCEPT');
+  const classCounts=Object.fromEntries(['OUTCOME','DRIVER','GUARDRAIL'].map(className=>[className,releaseContracts.filter(contract=>contract.class===className).length]));
+  const contract={...contractValidation,metric_count:metricIDs.length,owner_count:releaseContracts.length,source_contract_count:releaseContracts.length,complete_formula_count:releaseContracts.filter(contract=>contract.formula_complete===true).length,metric_ids:metricIDs,class_counts:classCounts};
   return {source_head_match:sourceHeadMatch,meta_operation:operation,activity,contract};
 }
 
