@@ -8,6 +8,7 @@ const fail=message=>{throw Error(message)};
 const nonEmptyString=value=>typeof value==='string'&&value.trim().length>0;
 const stringArray=value=>Array.isArray(value)&&value.every(nonEmptyString);
 const hasOwn=(value,key)=>Object.prototype.hasOwnProperty.call(value,key);
+const sameStringSet=(left,right)=>stringArray(left)&&stringArray(right)&&new Set(left).size===left.length&&new Set(right).size===right.length&&[...left].sort().join('\n')===[...right].sort().join('\n');
 const unknownState=record=>{
   if(hasOwn(record,'metric_id')||record.resolution!=='PARTIAL_SOURCE_CONTRACT_UNKNOWN_NOT_RUNTIME_PROOF')return 'FAIL_CLOSED';
   const unknown=record.unknown;
@@ -15,7 +16,7 @@ const unknownState=record=>{
   if(!['DIRECT_MISSING','DEPENDENCY_BLOCKED'].includes(unknown.unknown_class))return 'FAIL_CLOSED';
   if(unknown.unknown_class==='DIRECT_MISSING'&&unknown.blocked_by.length!==0)return 'FAIL_CLOSED';
   if(unknown.unknown_class==='DEPENDENCY_BLOCKED'&&unknown.blocked_by.length===0)return 'FAIL_CLOSED';
-  if(unknown.stage==='HELPER_SELECTION'&&(unknown.unknown_class!=='DEPENDENCY_BLOCKED'||unknown.blocked_by.length===0))return 'FAIL_CLOSED';
+  if(unknown.stage==='HELPER_SELECTION'&&(unknown.unknown_class!=='DEPENDENCY_BLOCKED'||unknown.blocked_by.length===0||!Array.isArray(record.helper_candidates)||record.helper_candidates.length===0||!stringArray(record.helper_candidates.map(candidate=>candidate.candidate_id))||!sameStringSet(unknown.blocked_by,record.helper_candidates.map(candidate=>candidate.candidate_id))))return 'FAIL_CLOSED';
   if(unknown.stage==='ARGUMENT_BINDING'&&(unknown.unknown_class!=='DIRECT_MISSING'||unknown.blocked_by.length!==0))return 'FAIL_CLOSED';
   return 'UNKNOWN';
 };
@@ -31,9 +32,10 @@ if(new Set(partials.map(record=>record.callsite_id)).size!==partials.length)fail
 const base=partials.find(record=>record.call.path==='internal/meta/externalcapabilityexecution/assuranceeligibility/indicators.go'&&record.call.line===11);
 if(!base)fail('real assuranceeligibility partial record missing');
 const ambiguous=structuredClone(base);
-ambiguous.unknown={...ambiguous.unknown,stage:'HELPER_SELECTION',reason:'MULTIPLE_LOCAL_INDICATOR_HELPERS_MATCH_CALLSITE',unknown_class:'DEPENDENCY_BLOCKED',next_operation:'CONFIRM_HELPER_SELECTION',blocked_by:[base.callsite_id+'|candidate:a',base.callsite_id+'|candidate:b'],missing_fields:['helper_selection']};
 ambiguous.helper_candidates=[base.helper_candidates[0],structuredClone(base.helper_candidates[0])];
 ambiguous.helper_candidates[1].candidate_id+='|candidate:b';
+const ambiguousCandidateIDs=ambiguous.helper_candidates.map(candidate=>candidate.candidate_id);
+ambiguous.unknown={...ambiguous.unknown,stage:'HELPER_SELECTION',reason:'MULTIPLE_LOCAL_INDICATOR_HELPERS_MATCH_CALLSITE',unknown_class:'DEPENDENCY_BLOCKED',next_operation:'CONFIRM_HELPER_SELECTION',blocked_by:ambiguousCandidateIDs,missing_fields:['helper_selection']};
 requireUnknown(ambiguous);
 const binding=structuredClone(base);
 binding.unknown={...binding.unknown,stage:'ARGUMENT_BINDING',reason:'ARGUMENT_ARITY_OR_EMPTY_ARGUMENTS',unknown_class:'DIRECT_MISSING',next_operation:'BIND_ARGUMENTS_WITH_SOURCE_ARITY',blocked_by:[],missing_fields:['argument_expressions']};
@@ -54,9 +56,13 @@ const invalidDirectFrontier=structuredClone(base);invalidDirectFrontier.unknown.
 if(unknownState(invalidDirectFrontier)!=='FAIL_CLOSED')fail('direct-missing invalid frontier was not fail closed');
 const invalidDependencyFrontier=structuredClone(ambiguous);invalidDependencyFrontier.unknown.blocked_by=[];
 if(unknownState(invalidDependencyFrontier)!=='FAIL_CLOSED')fail('dependency-blocked empty frontier was not fail closed');
+const danglingFrontier=structuredClone(ambiguous);danglingFrontier.unknown.blocked_by=[...ambiguousCandidateIDs,'dangling-candidate-id'];
+if(unknownState(danglingFrontier)!=='FAIL_CLOSED')fail('dangling helper frontier was not fail closed');
+const duplicateFrontier=structuredClone(ambiguous);duplicateFrontier.unknown.blocked_by=[ambiguousCandidateIDs[0],ambiguousCandidateIDs[0]];
+if(unknownState(duplicateFrontier)!=='FAIL_CLOSED')fail('duplicate helper frontier was not fail closed');
 const sameLengthReferenceMutation=structuredClone(partials);
 const firstDifferent=sameLengthReferenceMutation.findIndex((record,index)=>index>0&&referenceKey(record.call)!==referenceKey(sameLengthReferenceMutation[0].call));
 if(firstDifferent<1)fail('could not construct reference multiset counterexample');
 sameLengthReferenceMutation[firstDifferent].call=structuredClone(sameLengthReferenceMutation[0].call);
 if(exactReferenceMultiset(sameLengthReferenceMutation,atlas.source_contracts.unresolved_calls))fail('same-length reference mutation was accepted');
-console.log(JSON.stringify({schema:'gooo/meta-metric-atlas-partial-contract-cases/v2',real_partial_records:partials.length,real_stage_counts:[...new Set(partials.map(record=>record.unknown.stage))].sort(),reference_multiset_match:true,callsite_ids_unique:true,counterexamples:{ambiguous_helper:'UNKNOWN',argument_binding:'UNKNOWN',null_metric_id:'FAIL_CLOSED',empty_metric_id:'FAIL_CLOSED',missing_required_string:'FAIL_CLOSED',null_required_string:'FAIL_CLOSED',wrong_frontier_type:'FAIL_CLOSED',invalid_direct_frontier:'FAIL_CLOSED',invalid_dependency_frontier:'FAIL_CLOSED',same_length_reference_mutation:'FAIL_CLOSED'}}));
+console.log(JSON.stringify({schema:'gooo/meta-metric-atlas-partial-contract-cases/v3',real_partial_records:partials.length,real_stage_counts:[...new Set(partials.map(record=>record.unknown.stage))].sort(),reference_multiset_match:true,callsite_ids_unique:true,counterexamples:{ambiguous_helper:'UNKNOWN',argument_binding:'UNKNOWN',null_metric_id:'FAIL_CLOSED',empty_metric_id:'FAIL_CLOSED',missing_required_string:'FAIL_CLOSED',null_required_string:'FAIL_CLOSED',wrong_frontier_type:'FAIL_CLOSED',invalid_direct_frontier:'FAIL_CLOSED',invalid_dependency_frontier:'FAIL_CLOSED',dangling_helper_frontier:'FAIL_CLOSED',duplicate_helper_frontier:'FAIL_CLOSED',same_length_reference_mutation:'FAIL_CLOSED'}}));
