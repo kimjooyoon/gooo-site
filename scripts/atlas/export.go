@@ -106,7 +106,7 @@ func export() error {
 			}
 		}
 	}
-	contracts,err:=collectContracts(sources)
+	contracts,err:=collectContracts(sources,commit)
 	if err!=nil{return err}
 	for _,contract:=range contracts.Calls {
 		metric:=ensure(contract.MetricID)

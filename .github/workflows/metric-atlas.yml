@@ -41,8 +41,41 @@ jobs:
           cp scripts/atlas/*.go "$RUNNER_TEMP/atlas-source/cmd/metric-atlas-export/"
           cd "$RUNNER_TEMP/atlas-source"
           go run -mod=readonly ./cmd/metric-atlas-export > "$GITHUB_WORKSPACE/atlas-output/catalog.json"
+      - name: Exercise partial contract AST fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/atlas-source"
+          go test -mod=readonly ./cmd/metric-atlas-export
       - name: Render source-backed map and record collection scope
         run: node scripts/atlas/render.mjs atlas-output/catalog.json scripts/atlas/template.html atlas-output/metric-map.html
+      - name: Verify partial source contracts and preserved cohort
+        shell: bash
+        run: |
+          set -euo pipefail
+          catalog=atlas-output/catalog.json
+          test "$(jq '.source_contracts.calls | length' "$catalog")" -eq 593
+          test "$(jq '.source_contracts.unresolved_calls | length' "$catalog")" -eq 97
+          test "$(jq '.source_contracts.partial_calls | length' "$catalog")" -eq 97
+          test "$(jq '.source_contracts.parsed_production_go_files' "$catalog")" -eq 4442
+          test "$(jq '.metrics | length' "$catalog")" -eq 1094
+          test "$(jq '(.source_contracts.calls | length) + (.source_contracts.unresolved_calls | length)' "$catalog")" -eq 690
+          jq -e '((.source_contracts.partial_calls | map(.call.path + "#" + (.call.line | tostring) + "#" + .call.kind) | sort) == (.source_contracts.unresolved_calls | map(.path + "#" + (.line | tostring) + "#" + .kind) | sort)) and ((.source_contracts.partial_calls | map(.callsite_id) | unique | length) == (.source_contracts.partial_calls | length))' "$catalog" >/dev/null
+          jq -e '.source_contracts.partial_calls | map(select(.call.path == "internal/meta/externalcapabilityexecution/assuranceeligibility/indicators.go" and .call.line == 11)) | if length == 1 then .[0] else error("assuranceeligibility partial callsite missing or duplicated") end | select((has("metric_id") | not) and ([.call_argument_expressions[] | select(contains("artifact.Name"))] | length > 0) and (.helper_candidates | length > 0) and (.helper_candidates[0].result_field_sets | length > 0) and (.unknown.missing_fields | index("metric_id") != null) and (.unknown.blocked_by | type == "array"))' "$catalog" >/dev/null
+          jq -e '.source_contracts.partial_calls | map(select(.call.path == "internal/meta/externalcapabilityexecution/authorization/indicators.go" and .call.line == 25)) | if length == 1 then .[0] else error("authorization partial callsite missing or duplicated") end | select((has("metric_id") | not) and ([.call_argument_expressions[] | select(contains("spec"))] | length > 0) and ([.call_argument_expressions[] | select(contains("states[index]"))] | length > 0) and (.helper_candidates | length > 0) and (.helper_candidates[0].argument_expressions | length > 0) and (.helper_candidates[0].result_field_sets | length > 0) and (.unknown.missing_fields | index("metric_id") != null))' "$catalog" >/dev/null
+          jq -e '.source_contracts.partial_calls | all(.unknown | (.stage != "HELPER_SELECTION" or (.unknown_class == "DEPENDENCY_BLOCKED" and (.blocked_by | type == "array" and length > 0))))' "$catalog" >/dev/null
+          jq -e '.source_contracts.partial_calls | all(.unknown | (.stage != "ARGUMENT_BINDING" or (.unknown_class == "DIRECT_MISSING" and (.blocked_by | type == "array" and length == 0))))' "$catalog" >/dev/null
+          jq -e '.source_contracts.partial_calls | all((has("metric_id") | not) and (.resolution | type == "string" and length > 0 and . == "PARTIAL_SOURCE_CONTRACT_UNKNOWN_NOT_RUNTIME_PROOF") and ([.unknown.stage,.unknown.step,.unknown.reason,.unknown.unknown_class,.unknown.next_operation] | all(type == "string" and length > 0)) and (.unknown.blocked_by | type == "array" and all(type == "string" and length > 0)) and (.unknown.missing_fields | type == "array" and all(type == "string" and length > 0)) and ((.unknown.unknown_class == "DIRECT_MISSING" and (.unknown.blocked_by | length == 0)) or (.unknown.unknown_class == "DEPENDENCY_BLOCKED" and (.unknown.blocked_by | length > 0))))' "$catalog" >/dev/null
+          jq -e '.source_contracts.partial_calls | all(if .unknown.stage == "HELPER_SELECTION" then (.helper_candidates | type == "array" and length > 0) and ((.helper_candidates | map(.candidate_id)) as $ids | ($ids | all(type == "string" and length > 0)) and (($ids | unique | length) == ($ids | length))) and (.unknown.blocked_by | type == "array" and all(type == "string" and length > 0)) and ((.unknown.blocked_by | sort) == (.helper_candidates | map(.candidate_id) | sort)) else true end)' "$catalog" >/dev/null
+          node scripts/atlas/partial-contract-cases.mjs "$catalog" | tee "$RUNNER_TEMP/partial-contract-cases.json"
+          {
+            echo '## Partial source contract checks'
+            echo
+            jq '{source_contract_cohort: .source_contracts | {resolved_symbolic_calls: (.calls | length), unresolved_callsites: (.unresolved_calls | length), partial_contracts: (.partial_calls | length), recognized_constructor_callsites: ((.calls | length) + (.unresolved_calls | length))}, partial_stage_counts: ([.source_contracts.partial_calls[].unknown.stage] | sort | group_by(.) | map({stage: .[0], count: length}) )}' "$catalog"
+            cat "$RUNNER_TEMP/partial-contract-cases.json"
+            echo
+            echo 'AST fixture test: executed against collectContracts in the disposable upstream source copy'
+          } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: language-metric-atlas-${{ github.event.pull_request.head.sha || github.sha }}
