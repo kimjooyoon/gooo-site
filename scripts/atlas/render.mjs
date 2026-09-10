@@ -21,7 +21,11 @@ for(const concept of atlas.concepts){concept.translation=concepts[concept.id]?{t
 for(const concept of atlas.concepts){const n=narratives[concept.id];concept.narrative_ko=n?{problem:n[0],effect:n[1],state:'EDITORIAL_SOURCE_DECLARATION'}:null;for(const useCase of concept.use_cases){const translated=n?.[2][useCase.id];useCase.translation_ko=translated?{trigger:translated[0],expected:translated[1],state:'EDITORIAL_EXPECTATION_NOT_CURRENT_OBSERVATION'}:null;}}
 for(const metric of atlas.metrics)metric.source_contracts=(atlas.source_contracts?.calls??[]).filter(call=>call.metric_id===metric.id);
 const partialContracts=atlas.source_contracts?.partial_calls??[];
-const sourceContractCohort={resolved_symbolic_calls:atlas.source_contracts?.calls?.length??0,unresolved_callsites:atlas.source_contracts?.unresolved_calls?.length??0,partial_contracts:partialContracts.length,recognized_constructor_callsites:(atlas.source_contracts?.calls?.length??0)+(atlas.source_contracts?.unresolved_calls?.length??0),partial_contracts_match_unresolved_calls:partialContracts.length===(atlas.source_contracts?.unresolved_calls?.length??0)};
+const referenceKey=reference=>reference.path+'#'+reference.line+'#'+reference.kind;
+const sortedReferences=references=>references.map(referenceKey).sort();
+const partialReferenceMultiset=sortedReferences(partialContracts.map(record=>record.call));
+const unresolvedReferenceMultiset=sortedReferences(atlas.source_contracts?.unresolved_calls??[]);
+const sourceContractCohort={resolved_symbolic_calls:atlas.source_contracts?.calls?.length??0,unresolved_callsites:atlas.source_contracts?.unresolved_calls?.length??0,partial_contracts:partialContracts.length,recognized_constructor_callsites:(atlas.source_contracts?.calls?.length??0)+(atlas.source_contracts?.unresolved_calls?.length??0),partial_contracts_match_unresolved_calls:JSON.stringify(partialReferenceMultiset)===JSON.stringify(unresolvedReferenceMultiset),partial_reference_multiset_matches_unresolved_calls:JSON.stringify(partialReferenceMultiset)===JSON.stringify(unresolvedReferenceMultiset),partial_callsite_ids_unique:new Set(partialContracts.map(record=>record.callsite_id)).size===partialContracts.length};
 atlas.partial_contracts=partialContracts;
 atlas.source_contract_cohort=sourceContractCohort;
 for(const metric of atlas.metrics){const translation=translateMetric(metric.id);metric.translation={...translation,traceability:translation.untranslated_tokens.length?metricTraceability(metric,translation):null};}
