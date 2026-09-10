@@ -59,10 +59,12 @@ jobs:
           jq -e '.source_contracts.partial_calls | all(.unknown | (.stage != "HELPER_SELECTION" or (.unknown_class == "DEPENDENCY_BLOCKED" and (.blocked_by | type == "array" and length > 0))))' "$catalog" >/dev/null
           jq -e '.source_contracts.partial_calls | all(.unknown | (.stage != "ARGUMENT_BINDING" or (.unknown_class == "DIRECT_MISSING" and (.blocked_by | type == "array" and length == 0))))' "$catalog" >/dev/null
           jq -e '.source_contracts.partial_calls | all((has("metric_id") | not) and (.resolution == "PARTIAL_SOURCE_CONTRACT_UNKNOWN_NOT_RUNTIME_PROOF") and (.unknown.stage != "" or error("partial stage missing")) and (.unknown.step != "" or error("partial step missing")) and (.unknown.reason != "" or error("partial reason missing")) and (.unknown.unknown_class != "" or error("partial class missing")) and (.unknown.next_operation != "" or error("partial next operation missing")) and (.unknown.blocked_by | type == "array") and (.unknown.missing_fields | type == "array"))' "$catalog" >/dev/null
+          node scripts/atlas/partial-contract-cases.mjs "$catalog" | tee "$RUNNER_TEMP/partial-contract-cases.json"
           {
             echo '## Partial source contract checks'
             echo
             jq '{source_contract_cohort: .source_contracts | {resolved_symbolic_calls: (.calls | length), unresolved_callsites: (.unresolved_calls | length), partial_contracts: (.partial_calls | length), recognized_constructor_callsites: ((.calls | length) + (.unresolved_calls | length))}, partial_stage_counts: ([.source_contracts.partial_calls[].unknown.stage] | sort | group_by(.) | map({stage: .[0], count: length}) )}' "$catalog"
+            cat "$RUNNER_TEMP/partial-contract-cases.json"
           } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:

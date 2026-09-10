@@ -8,6 +8,7 @@ The atlas is a documentation consumer, not a language readiness evaluator.
 - `contracts.go` preserves package-local Indicator constructor arguments and result expressions using the Go AST. It does not execute those expressions.
 - `contracts.go` keeps resolved symbolic contracts in `calls` and records the same unresolved helper callsites separately in `partial_calls`, retaining source argument and candidate-helper result expressions without inventing a metric ID.
 - A partial record is an UNKNOWN source observation, not a resolved metric contract or runtime evidence. Its source-SHA/package/path/line coordinate, missing fields, stable blocking frontier, and next operation are part of the inspectable record.
+- `partial-contract-cases.mjs` is an Actions-only schema check: it exercises the real cohort plus explicit ambiguous-helper, argument-binding, and malformed-promotion counterexamples. Synthetic counterexamples do not increase the source cohort.
 - Literal occurrences, local identifier candidates, lexical activity declarations, registry bindings, symbolic contracts, and runtime evidence are different relations. Do not promote one into another.
 - `translations.mjs` is an editorial glossary and concept explanation layer. Unknown tokens remain visible. Full semantic translations require reading the evaluator and denominator, not composing glossary words.
 - No current CI achievement is inferred from source stages, stored JSON, or a use case's historical expected outcome.
