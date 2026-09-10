@@ -35,7 +35,8 @@ activity ForwardTurn(TurnRequest) -> TurnRequest computes "record.forward:v1"</p
 </section></div>
 <details><summary>Evidence boundaries and next experiments</summary><p>Export includes the fixed fixture, requests, before/after state, accepted/rejected counts and a local replay recipe. It is user-controlled browser output, not a signed receipt or proof of correctness. No success percentage is interpreted as language completeness.</p><p>Next: execute ForwardTurn using the released runtime, compare its emitted fields to the submitted request, then move a bounded game transition into a Gooo-owned contract. Keep observation, gameplay success and permission to apply changes separate.</p></details>
 </main><footer>Client-only experiment · No network calls made by gameplay · <a href="evidence.html">Read the evidence boundaries</a></footer>
-<script>
+<script type="module">
+import {toGoooRequest} from './relay-request.mjs';
 'use strict';
 const $=id=>document.getElementById(id), walls=new Set([7,11,13,17]), dirs={N:[0,-1],E:[1,0],S:[0,1],W:[-1,0]};
 let state,events,timer=null,lastMessage='';
@@ -51,7 +52,8 @@ else if(!['observe','move'].includes(command.action)||!Object.hasOwn(dirs,comman
 else if(state.won||state.energy===0)reason='RUN_FINISHED';
 else {target=neighbor(state.position,command.direction);if(target===-1)reason='OUTSIDE_BOARD';else if(command.action==='observe'&&state.known[target]!=='unknown')reason='ALREADY_OBSERVED';else if(command.action==='move'&&state.known[target]!=='safe')reason=state.known[target]==='wall'?'BLOCKED_TILE':'OBSERVATION_MISSING';}
 if(reason==='ACCEPTED'){if(command.action==='observe')state.known[target]=walls.has(target)?'wall':'safe';else state.position=target;state.energy--;state.turn++;state.won=state.position===24;}
-events.push({index:events.length+1,actor,request:command,decision:reason==='ACCEPTED'?'ACCEPTED':'REJECTED',reason,before,after:snapshot()});
+let goooInput=null;try{goooInput=toGoooRequest(command);}catch{}
+events.push({index:events.length+1,actor,request:command,gooo_input:goooInput,decision:reason==='ACCEPTED'?'ACCEPTED':'REJECTED',reason,before,after:snapshot()});
 lastMessage=state.won?'Relay reached. Gameplay complete; Gooo semantic verification is still unknown.':state.energy===0?'Energy exhausted. Start another run.':reason==='ACCEPTED'?command.action+' '+command.direction+' accepted.':reason+' — no state change.';
 if(state.won||state.energy===0)stop();render();}
 function plan(){const queue=[state.position],seen=new Set(queue),previous=new Map();while(queue.length){const p=queue.shift();if(p===24)break;for(const direction of ['E','S','W','N']){const n=neighbor(p,direction);if(n<0||seen.has(n)||state.known[n]==='wall')continue;seen.add(n);previous.set(n,{p,direction});queue.push(n);}}

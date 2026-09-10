@@ -22,7 +22,7 @@ for (const [name, html] of documents) {
   }
 }
 await mkdir('dist', {recursive:true});
-const files = [...pages, 'style.css', 'astryx.mjs'];
+const files = [...pages, 'style.css', 'astryx.mjs', 'relay-request.mjs'];
 const digests = {};
 let bytes = 0;
 for (const file of files) {

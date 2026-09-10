@@ -3,12 +3,13 @@ import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
+import {toGoooRequest} from '../relay-request.mjs';
 
 if (process.env.CI !== 'true') throw new Error('Runtime observation is CI-only');
 const [binary, source, output] = process.argv.slice(2);
 assert(binary && source && output, 'binary, source and evidence directory required');
 mkdirSync(output, {recursive:true});
-const input = {RunID:'relay-fixture-v1', Turn:'0', Action:'observe', Direction:'E'};
+const input = toGoooRequest({run_id:'relay-fixture-v1', turn:0, action:'observe', direction:'E'});
 const sourceDigest = createHash('sha256').update(readFileSync(source)).digest('hex');
 const runs = [];
 function invoke(id, fields) {
