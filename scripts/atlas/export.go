@@ -109,6 +109,8 @@ func export() error {
 	metrics := make([]*Metric,0,len(ids))
 	for _, metric := range ids { metrics=append(metrics,metric) }
 	sort.Slice(metrics,func(i,j int)bool{return metrics[i].ID<metrics[j].ID})
+	contracts,err:=collectContracts(sources)
+	if err!=nil{return err}
 	value := map[string]any{
 		"schema":"gooo/source-metric-atlas/v1", "source_repository":"kimjooyoon/meta-ontology-go", "source_sha":commit,
 		"observation_state":"SOURCE_CATALOG_ONLY", "current_conformance":nil,
@@ -116,6 +118,7 @@ func export() error {
 		"assurance_obligations":languageassurance.Denominator(), "assurance_operations":languageassurance.CanonicalMetaOperations(),
 		"metric_program_operations":metricprogram.CanonicalOperations(), "metrics":metrics,"activities":activities,
 		"scanned_sources":sources,"excluded_paths":skipped,
+		"source_contracts":contracts,
 		"limitations":[]string{"Literal occurrence is not a metric definition or semantic binding.","Local metric names can collide across packages; keep path context.","Lexical Gooo activity matches are not compiler-validated bindings.","Dynamic/computed identifiers and other declaration shapes require additional adapters.","Registry stage and expected outcomes are source declarations, not current CI achievements.","Stored JSON receipts are not automatically trusted as fresh evidence."},
 	}
 	encoder:=json.NewEncoder(os.Stdout)

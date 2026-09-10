@@ -7,6 +7,7 @@ const atlas=JSON.parse(raw);
 if(atlas.schema!=='gooo/source-metric-atlas/v1'||!Array.isArray(atlas.concepts)||!Array.isArray(atlas.obligations)||!Array.isArray(atlas.metrics))throw Error('Unsupported source catalog');
 for(const concept of atlas.concepts){concept.translation=concepts[concept.id]?{title:concepts[concept.id][0],description:concepts[concept.id][1],state:'EDITORIAL'}:{title:concept.id,description:'한국어 해설 미작성. 원문을 유지합니다.',state:'MISSING'};}
 for(const metric of atlas.metrics)metric.translation=translateMetric(metric.id);
+for(const metric of atlas.metrics)metric.source_contracts=(atlas.source_contracts?.calls??[]).filter(call=>call.metric_id===metric.id);
 atlas.catalog_sha256=createHash('sha256').update(raw).digest('hex');
 atlas.presentation_scope='REGISTRY_EXPORT_AND_LITERAL_INDEX_NOT_CURRENT_CONFORMANCE';
 const json=JSON.stringify(atlas).replaceAll('<','\\u003c');

@@ -38,7 +38,7 @@ jobs:
           set -euo pipefail
           cp -R upstream "$RUNNER_TEMP/atlas-source"
           mkdir -p "$RUNNER_TEMP/atlas-source/cmd/metric-atlas-export" atlas-output
-          cp scripts/atlas/export.go "$RUNNER_TEMP/atlas-source/cmd/metric-atlas-export/main.go"
+          cp scripts/atlas/*.go "$RUNNER_TEMP/atlas-source/cmd/metric-atlas-export/"
           cd "$RUNNER_TEMP/atlas-source"
           go run -mod=readonly ./cmd/metric-atlas-export > "$GITHUB_WORKSPACE/atlas-output/catalog.json"
       - name: Render source-backed map and record collection scope
