@@ -5,7 +5,7 @@ const renderedPath=process.argv[3];
 if(!receiptPath||!renderedPath)throw Error('render receipt and rendered atlas paths are required');
 const receipt=JSON.parse(await readFile(receiptPath,'utf8'));
 const rendered=await readFile(renderedPath,'utf8');
-const match=rendered.match(/<script id="atlas-data" type="application\/json">([\s\S]*)<\/script>/);
+const match=rendered.match(/<script id="atlas-data" type="application\/json">([\s\S]*?)<\/script>/);
 if(!match)throw Error('rendered atlas data marker is missing');
 const catalog=JSON.parse(match[1]);
 const fail=message=>{throw Error(message)};
