@@ -84,6 +84,16 @@ jobs:
           test "$(jq -r '.native_evidence.ingestion_unknown.unknown_class' "$receipt")" = DIRECT_MISSING
           test "$(jq '.native_evidence.ingestion_unknown.blocked_by | length' "$receipt")" -eq 0
           node scripts/atlas/native-evidence-cases.mjs "$receipt" | tee "$RUNNER_TEMP/native-evidence-cases.json"
+      - name: Verify source-backed translation cohort
+        shell: bash
+        run: |
+          set -euo pipefail
+          receipt=atlas-output/metric-map.html.receipt.json
+          test "$(jq '.metric_translation_cohort.total' "$receipt")" -eq 47
+          test "$(jq '.metric_translation_cohort.source_backed_count' "$receipt")" -eq 47
+          test "$(jq '.metric_translation_cohort.scope' "$receipt")" = AUDIT_COHORT_NOT_COMPLETENESS_DENOMINATOR
+          test "$(jq '.metric_labels_with_untranslated_tokens' "$receipt")" -eq 47
+          node scripts/atlas/translation-cohort-cases.mjs "$receipt" | tee "$RUNNER_TEMP/translation-cohort-cases.json"
       - name: Verify partial source contracts and preserved cohort
         shell: bash
         run: |
@@ -110,6 +120,7 @@ jobs:
             cat "$RUNNER_TEMP/partial-contract-cases.json"
             cat "$RUNNER_TEMP/source-field-guide-cases.json"
             cat "$RUNNER_TEMP/native-evidence-cases.json"
+            cat "$RUNNER_TEMP/translation-cohort-cases.json"
             echo
             echo 'AST fixture test: executed against collectContracts in the disposable upstream source copy'
           } >> "$GITHUB_STEP_SUMMARY"
