@@ -600,7 +600,12 @@ func releaseContractFromCall(call *ast.CallExpr, callReference Reference, functi
 	if !contract.FormulaComplete {
 		contract.Resolution = "SOURCE_OWNER_BOUND_FORMULA_PARTIAL_UNKNOWN_NOT_RUNTIME_EVIDENCE"
 	}
-	if previous, exists := metricSourceByID[metricID]; exists && (previous.Path != metricIDField.Reference.Path || previous.Line != metricIDField.Reference.Line) {
+	metricIDSource := metricIDField.ResolvedReference
+	if metricIDSource.Path == "" {
+		metricIDSource = metricIDField.Reference
+	}
+	contract.MetricIDSource = metricIDSource
+	if previous, exists := metricSourceByID[metricID]; exists && (previous.Path != metricIDSource.Path || previous.Line != metricIDSource.Line) {
 		return unknown("METRIC_ID_BINDING", "RELEASE_METRIC_ID_HAS_MULTIPLE_SOURCE_ARRAY_OWNERS", "DEPENDENCY_BLOCKED", "SELECT_ONE_RELEASE_METRIC_ID_OWNER", []string{"metric-id:" + metricID})
 	}
 	return contract, ReleaseMetricUnknown{}, true
