@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      ATLAS_SOURCE_SHA: ab91e6ec8ae7d587acbfc3d041f6edacefc02f05
+      ATLAS_SOURCE_SHA: 132fb3c8d2a391aa6a5a9ea47d13493b00182e5a
     steps:
       - uses: actions/checkout@v7
         with:
@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: kimjooyoon/meta-ontology-go
-          ref: ab91e6ec8ae7d587acbfc3d041f6edacefc02f05
+          ref: 132fb3c8d2a391aa6a5a9ea47d13493b00182e5a
           path: upstream
           persist-credentials: false
       - uses: actions/setup-go@v6
@@ -64,6 +64,26 @@ jobs:
           test "$(jq '.concepts' "$receipt")" -eq 29
           test "$(jq '[.concepts[].use_cases] | add | length' "$catalog")" -eq 57
           node scripts/atlas/source-field-guide-cases.mjs "$receipt" "$catalog" | tee "$RUNNER_TEMP/source-field-guide-cases.json"
+      - name: Verify exact-head native evidence boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          receipt=atlas-output/metric-map.html.receipt.json
+          test "$(jq -r '.native_evidence.source_head_sha' "$receipt")" = "$ATLAS_SOURCE_SHA"
+          test "$(jq -r '.native_evidence.observation_state' "$receipt")" = EXACT_HEAD_SUPPLIED_NOT_INGESTED
+          test "$(jq -r '.native_evidence.ingestion_state' "$receipt")" = UNKNOWN
+          test "$(jq -r '.native_evidence.workflow_run_id' "$receipt")" -eq 34521687942
+          test "$(jq -r '.native_evidence.artifact_id' "$receipt")" -eq 10169972879
+          test "$(jq -r '.native_evidence.artifact_kind' "$receipt")" = FINAL_ELIGIBILITY_PROJECTION
+          test "$(jq -r '.native_evidence.aggregate_report_artifact_id' "$receipt")" -eq 10169966229
+          test "$(jq -r '.native_evidence.artifact_digest' "$receipt")" = sha256:31b3d04d823bc55118acd679dac4e56d368daad500493ecc213642775adba416
+          test "$(jq -r '.native_evidence.reported_decision' "$receipt")" = EVIDENCE_CLOSED
+          test "$(jq -r '.native_evidence.map_decision' "$receipt")" = UNKNOWN
+          test "$(jq -r '.native_evidence.ingestion_unknown.stage' "$receipt")" = CROSS_PROJECT_INGESTION
+          test "$(jq -r '.native_evidence.ingestion_unknown.step' "$receipt")" = NATIVE_ARTIFACT_DOWNLOAD_AND_DIGEST_VERIFY
+          test "$(jq -r '.native_evidence.ingestion_unknown.unknown_class' "$receipt")" = DIRECT_MISSING
+          test "$(jq '.native_evidence.ingestion_unknown.blocked_by | length' "$receipt")" -eq 0
+          node scripts/atlas/native-evidence-cases.mjs "$receipt" | tee "$RUNNER_TEMP/native-evidence-cases.json"
       - name: Verify partial source contracts and preserved cohort
         shell: bash
         run: |
@@ -72,7 +92,7 @@ jobs:
           test "$(jq '.source_contracts.calls | length' "$catalog")" -eq 593
           test "$(jq '.source_contracts.unresolved_calls | length' "$catalog")" -eq 97
           test "$(jq '.source_contracts.partial_calls | length' "$catalog")" -eq 97
-          test "$(jq '.source_contracts.parsed_production_go_files' "$catalog")" -eq 4442
+          test "$(jq '.source_contracts.parsed_production_go_files' "$catalog")" -eq 4456
           test "$(jq '.metrics | length' "$catalog")" -eq 1094
           test "$(jq '(.source_contracts.calls | length) + (.source_contracts.unresolved_calls | length)' "$catalog")" -eq 690
           jq -e '((.source_contracts.partial_calls | map(.call.path + "#" + (.call.line | tostring) + "#" + .call.kind) | sort) == (.source_contracts.unresolved_calls | map(.path + "#" + (.line | tostring) + "#" + .kind) | sort)) and ((.source_contracts.partial_calls | map(.callsite_id) | unique | length) == (.source_contracts.partial_calls | length))' "$catalog" >/dev/null
@@ -89,6 +109,7 @@ jobs:
             jq '{source_contract_cohort: .source_contracts | {resolved_symbolic_calls: (.calls | length), unresolved_callsites: (.unresolved_calls | length), partial_contracts: (.partial_calls | length), recognized_constructor_callsites: ((.calls | length) + (.unresolved_calls | length))}, partial_stage_counts: ([.source_contracts.partial_calls[].unknown.stage] | sort | group_by(.) | map({stage: .[0], count: length}) )}' "$catalog"
             cat "$RUNNER_TEMP/partial-contract-cases.json"
             cat "$RUNNER_TEMP/source-field-guide-cases.json"
+            cat "$RUNNER_TEMP/native-evidence-cases.json"
             echo
             echo 'AST fixture test: executed against collectContracts in the disposable upstream source copy'
           } >> "$GITHUB_STEP_SUMMARY"
