@@ -25,3 +25,9 @@ next closure rather than being inferred from record forwarding.
 
 Exports are unsigned user-controlled records, not trusted semantic evidence.
 There is no measured external utility or claimed speed/cost improvement.
+
+Runtime observation is attempted even when the earlier graph step fails, unless
+this run is cancelled. A failed build still makes runtime observation fail;
+there is no cached binary fallback. The graph failure remains a workflow
+failure. A runtime receipt can only close its own record-forward scope and
+cannot make this workflow or the consumer's graph contract pass.
