@@ -11,6 +11,9 @@ function metricTraceability(metric,translation){
   const failure=contracts.length?{stage:'TRANSLATION_GLOSSARY',reason:'TOKEN_NOT_IN_EDITORIAL_DICTIONARY;SOURCE_CONTRACT_SYMBOLIC_ONLY',next_operation:'REVIEW_GLOSSARY_TOKEN_AGAINST_SOURCE_CONTRACT'}:candidate?{stage:'SOURCE_IDENTITY',reason:'LOCAL_OR_LITERAL_CANDIDATE_NOT_GLOBAL_IDENTITY',next_operation:'CONFIRM_GLOBAL_METRIC_ID_AND_SEMANTICS'}:{stage:'SOURCE_IDENTITY',reason:'NO_FORMAL_SOURCE_CONTRACT_OR_RUNTIME_SEMANTIC_EVIDENCE',next_operation:'CONFIRM_REGISTRY_OR_CONSTRUCTOR_BINDING'};
   return {identifier:metric.id,identifier_kind:contracts.length?'SOURCE_METRIC_ID':candidate?'CANDIDATE':'UNCONFIRMED_METRIC_ID',original_label:metric.id,rendered_label:translation.ko,untranslated_tokens:translation.untranslated_tokens,source:references,callsites:contracts.map(contract=>({metric_id:contract.metric_id,package_scope:contract.package_scope,path:contract.call.path,line:contract.call.line,kind:contract.call.kind,helper:contract.helper})),classification,meaning_status:contracts.length?'SOURCE_CONTRACT_SYMBOLIC_NOT_RUNTIME_PROOF':candidate?'CANDIDATE_ID_UNCONFIRMED':'SOURCE_MEANING_OR_ID_UNCONFIRMED',failure_stage:failure.stage,failure_reason:failure.reason,next_operation:failure.next_operation};
 }
+function traceabilityRecords(metrics){return metrics.flatMap(metric=>metric.translation?.traceability?[metric.translation.traceability]:[]);}
+function countTraceabilityClasses(records){return Object.fromEntries([...new Set(records.map(record=>record.classification))].sort().map(classification=>[classification,records.filter(record=>record.classification===classification).length]));}
+function assertTraceabilityPartition(){const sample=[{translation:{traceability:null}},{translation:{traceability:{classification:'GLOSSARY_TOKEN_MISSING'}}},{translation:{traceability:{classification:'SOURCE_MEANING_OR_ID_UNCONFIRMED'}}}];const records=traceabilityRecords(sample);const counts=countTraceabilityClasses(records);if(records.length!==2||counts.GLOSSARY_TOKEN_MISSING!==1||counts.SOURCE_MEANING_OR_ID_UNCONFIRMED!==1||Object.values(counts).reduce((sum,count)=>sum+count,0)!==records.length)throw Error('Traceability population partition regression');}
 const raw=await readFile(input,'utf8');
 const atlas=JSON.parse(raw);
 if(atlas.schema!=='gooo/source-metric-atlas/v1'||!Array.isArray(atlas.concepts)||!Array.isArray(atlas.obligations)||!Array.isArray(atlas.metrics))throw Error('Unsupported source catalog');
@@ -20,8 +23,12 @@ for(const metric of atlas.metrics)metric.source_contracts=(atlas.source_contract
 for(const metric of atlas.metrics){const translation=translateMetric(metric.id);metric.translation={...translation,traceability:translation.untranslated_tokens.length?metricTraceability(metric,translation):null};}
 const untranslatedMetrics=atlas.metrics.filter(metric=>metric.translation.untranslated_tokens.length);
 const untranslatedIDs=untranslatedMetrics.map(metric=>metric.id);
-const traceability=untranslatedMetrics.map(metric=>metric.translation.traceability);
-const traceabilityCounts=Object.fromEntries([...new Set(traceability.map(item=>item.classification))].sort().map(classification=>[classification,traceability.filter(item=>item.classification===classification).length]));
+const traceability=traceabilityRecords(untranslatedMetrics);
+const traceabilityCounts=countTraceabilityClasses(traceability);
+assertTraceabilityPartition();
+if(traceability.length!==untranslatedMetrics.length||Object.values(traceabilityCounts).reduce((sum,count)=>sum+count,0)!==traceability.length)throw Error('Untranslated metric traceability population mismatch');
+atlas.metric_label_traceability=traceability;
+atlas.metric_label_traceability_counts=traceabilityCounts;
 atlas.catalog_sha256=createHash('sha256').update(raw).digest('hex');
 atlas.presentation_scope='REGISTRY_EXPORT_AND_LITERAL_INDEX_NOT_CURRENT_CONFORMANCE';
 const json=JSON.stringify(atlas).replaceAll('<','\\u003c');
