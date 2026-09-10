@@ -1,0 +1,51 @@
+name: Language metric atlas source export
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'scripts/atlas/**'
+      - 'metric-map.html'
+      - '.github/workflows/metric-atlas.yml'
+permissions:
+  contents: read
+concurrency:
+  group: metric-atlas-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      ATLAS_SOURCE_SHA: ab91e6ec8ae7d587acbfc3d041f6edacefc02f05
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: kimjooyoon/meta-ontology-go
+          ref: ab91e6ec8ae7d587acbfc3d041f6edacefc02f05
+          path: upstream
+          persist-credentials: false
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.0'
+          cache: true
+          cache-dependency-path: upstream/go.sum
+      - name: Export existing registries from a disposable source copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -R upstream "$RUNNER_TEMP/atlas-source"
+          mkdir -p "$RUNNER_TEMP/atlas-source/cmd/metric-atlas-export" atlas-output
+          cp scripts/atlas/export.go "$RUNNER_TEMP/atlas-source/cmd/metric-atlas-export/main.go"
+          cd "$RUNNER_TEMP/atlas-source"
+          go run -mod=readonly ./cmd/metric-atlas-export > "$GITHUB_WORKSPACE/atlas-output/catalog.json"
+      - name: Render source-backed map and record collection scope
+        run: node scripts/atlas/render.mjs atlas-output/catalog.json metric-map.html atlas-output/metric-map.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: language-metric-atlas-${{ github.event.pull_request.head.sha || github.sha }}
+          path: atlas-output/
+          if-no-files-found: error
+          retention-days: 14
