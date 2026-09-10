@@ -26,7 +26,7 @@ func ambiguous(id string, extra string) Indicator {
 	return Indicator{MetricID: id, Value: extra}
 }
 
-func variadic(id string, values ...string) Indicator {
+func variadic(id, label string, enabled bool, values ...string) Indicator {
 	if len(values) > 0 {
 		return Indicator{MetricID: id, Value: values[0]}
 	}
@@ -84,6 +84,17 @@ func use(name string) []Indicator {
 	candidate := bindingPartial.HelperCandidates[0]
 	if len(candidate.ArgumentExpressions) != 0 || !strings.Contains(strings.Join(bindingPartial.CallArgumentExpressions, "|"), `"a"`) || !strings.Contains(strings.Join(bindingPartial.CallArgumentExpressions, "|"), `"b"`) {
 		t.Fatalf("binding expressions were not preserved: partial=%+v candidate=%+v", bindingPartial, candidate)
+	}
+	if !reflect.DeepEqual(candidate.Parameters, []string{"id", "label", "enabled", "values"}) {
+		t.Fatalf("legacy parameter names changed: %#v", candidate.Parameters)
+	}
+	wantParameters := []ParameterDeclaration{
+		{Names: []string{"id", "label"}, TypeExpression: "string", Variadic: false},
+		{Names: []string{"enabled"}, TypeExpression: "bool", Variadic: false},
+		{Names: []string{"values"}, TypeExpression: "...string", Variadic: true},
+	}
+	if candidate.HelperSignature.TypeSource != "GO_AST_TYPE_EXPRESSION_ONLY_NOT_GO_TYPES" || !strings.Contains(candidate.HelperSignature.Declaration, "func variadic(") || !reflect.DeepEqual(candidate.HelperSignature.Parameters, wantParameters) {
+		t.Fatalf("helper declaration signature was not preserved: %#v", candidate.HelperSignature)
 	}
 	if len(candidate.ResultFieldSets) != 2 || candidate.ResultFieldSets[0]["Value"] == candidate.ResultFieldSets[1]["Value"] {
 		t.Fatalf("Indicator literal field sets were merged: %#v", candidate.ResultFieldSets)
