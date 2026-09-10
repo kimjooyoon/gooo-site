@@ -42,7 +42,7 @@ jobs:
           cd "$RUNNER_TEMP/atlas-source"
           go run -mod=readonly ./cmd/metric-atlas-export > "$GITHUB_WORKSPACE/atlas-output/catalog.json"
       - name: Render source-backed map and record collection scope
-        run: node scripts/atlas/render.mjs atlas-output/catalog.json metric-map.html atlas-output/metric-map.html
+        run: node scripts/atlas/render.mjs atlas-output/catalog.json scripts/atlas/template.html atlas-output/metric-map.html
       - uses: actions/upload-artifact@v4
         with:
           name: language-metric-atlas-${{ github.event.pull_request.head.sha || github.sha }}
