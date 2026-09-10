@@ -10,7 +10,7 @@ export const argumentFieldGuide={
   activity:entry('identity_scope','활동 이름','호출이나 선언이 연결하려는 활동의 원문 이름','이름의 존재만으로 실행·등록·유효한 binding을 증명하지 않습니다.'),
   actual:entry('observation_comparison','실제값 표현식','비교에 제공하려는 실제값의 원문 표현식','표현식만 보존하며 실행 결과나 산출 시점을 뜻하지 않습니다.'),
   applicability:entry('observation_comparison','적용 가능성','조건이나 규칙이 적용되는지 나타내려는 표현식','이름만으로 적용 범위와 판정 방향을 확정하지 않습니다.'),
-  basisPoints:entry('observation_comparison','basis point 값','진척 또는 차이를 basis point 단위로 적으려는 표현식','고정 분모·백분율 변환·성공 기준은 원문 판정식 없이는 알 수 없습니다.'),
+  basisPoints:entry('observation_comparison','만분율 값 표현식','진척 또는 차이를 만분율 값으로 적으려는 표현식','실제 지표의 분자·분모·성공은 이 이름이나 표현식만으로 추론하지 않습니다.'),
   choice:entry('actors_provenance','증명 선택','선택한 증명 방식의 원문 표현식','선택된 증명 방식은 현재 증거의 존재나 충족을 의미하지 않습니다.'),
   class:entry('actors_provenance','역할 분류','지표나 항목의 역할 분류를 적으려는 표현식','분류는 관측 상태나 성공/실패 상태가 아닙니다.'),
   comparator:entry('observation_comparison','비교 연산자','두 값을 비교할 때 사용할 연산자의 원문 표현식','실제 수식의 피연산자·방향·분모는 이 필드만으로 복원하지 않습니다.'),
@@ -34,14 +34,14 @@ export const argumentFieldGuide={
   proofChoice:entry('actors_provenance','증명 선택','선택된 증명 방식의 원문 표현식','선택은 관측 상태·충족·완료와 혼동하지 않습니다.'),
   reader:entry('actors_provenance','읽기 주체','값이나 문서를 읽는 주체의 원문 표현식','읽기 주체 이름은 실제 read 또는 권한 검사를 증명하지 않습니다.'),
   relation:entry('observation_comparison','비교 관계','값 사이의 관계를 지정하려는 원문 표현식','관계와 피연산자·분모·성공 여부는 함께 읽어야 하며 이름만으로 확정하지 않습니다.'),
-  resolution:entry('activity_evidence_decision','해상도 또는 버전 표현식','관측·계약의 해상도나 버전을 적으려는 원문 표현식','버전 표기는 호환성·최신성·성공을 보장하지 않습니다.'),
+  resolution:entry('activity_evidence_decision','해상도 표현식','관측·계약을 해석하는 해상도를 적으려는 원문 표현식','허용 값과 의미, 최신성, 성공 여부는 evaluator와 receipt를 확인해야 합니다.'),
   route:entry('identity_scope','경로','활동·증거·대상의 경로를 전달하려는 원문 표현식','경로 존재만으로 도달 가능성·실행·정확한 binding을 증명하지 않습니다.'),
   satisfied:entry('activity_evidence_decision','충족 여부 표현식','조건을 충족했는지 계산하려는 원문 표현식','실행 전 표현식은 실제 충족 결과가 아닙니다.'),
   status:entry('activity_evidence_decision','상태 표현식','레코드의 상태를 전달하려는 원문 표현식','상태의 허용 값과 의미는 해당 evaluator·receipt 없이는 단정하지 않습니다.'),
   suffix:entry('identity_scope','접미사','식별자나 이름 뒤에 붙일 원문 표현식','접미사는 전역 ID 규칙이나 의미를 자동으로 만들지 않습니다.'),
   target:entry('observation_comparison','목표값 표현식','비교할 목표값의 원문 표현식','Target만으로 방향·분모·성공 기준을 추론하지 않습니다.'),
   total:entry('observation_comparison','전체값 표현식','전체 개수나 기준량을 적으려는 원문 표현식','전체값은 고정 분모나 완료 수와 동일하다고 보지 않습니다.'),
-  trilemma:entry('activity_evidence_decision','삼중 제약 표현식','세 가지 선택지나 제약을 표현하려는 원문 표현식','이름만으로 세 항의 정의·우선순위·판정식을 확정하지 않습니다.'),
+  trilemma:entry('activity_evidence_decision','뮌하우젠 트릴레마 근거·증명 선택','뮌하우젠 트릴레마에 관한 근거나 증명 선택을 표현하려는 원문 표현식','어떤 근거가 선택되었는지와 그 판정식은 원문 evaluator를 확인해야 합니다.'),
   unit:entry('observation_comparison','단위 표현식','값을 읽을 단위를 적으려는 원문 표현식','단위만으로 환산·분모·허용 범위를 결정하지 않습니다.'),
   value:entry('observation_comparison','값 표현식','레코드에 넣을 값의 원문 표현식','값 표현식은 실행된 관측값이나 성공 결과가 아닙니다.')
 };
@@ -68,26 +68,26 @@ export const resultFieldGuide={
   ProofChoice:entry('actors_provenance','증명 선택','결과에 기록된 증명 선택','증명 선택은 증명 수행·충족·완료와 다릅니다.'),
   Reader:entry('actors_provenance','읽기 주체','결과를 읽는 주체','읽기 주체는 실제 read 또는 권한 검사를 증명하지 않습니다.'),
   Relation:entry('observation_comparison','비교 관계','결과에 기록된 값 사이의 관계','관계만으로 전체 수식·분모·성공 여부를 추론하지 않습니다.'),
-  Resolution:entry('activity_evidence_decision','해상도 또는 버전','결과 계약의 해상도나 버전','버전 표기는 호환성·최신성·성공을 보장하지 않습니다.'),
+  Resolution:entry('activity_evidence_decision','해상도','결과 계약을 해석하는 해상도','허용 값과 의미, 최신성, 성공 여부는 evaluator와 receipt를 확인해야 합니다.'),
   Route:entry('identity_scope','경로','결과가 가리키는 경로','경로 존재만으로 도달 가능성·실행·정확한 binding을 증명하지 않습니다.'),
   Satisfied:entry('activity_evidence_decision','충족 상태','결과에 기록된 조건 충족 여부','필드 값만으로 판정식·입력·현재성을 복원하지 않습니다.'),
   State:entry('activity_evidence_decision','상태','결과 레코드의 상태','허용 값과 의미는 evaluator·receipt 없이는 단정하지 않습니다.'),
   Status:entry('activity_evidence_decision','상태','결과에 기록된 상태','상태명은 성공·실패·현재성의 근거가 될 수 없으며 정의를 함께 확인해야 합니다.'),
   Target:entry('observation_comparison','목표값','비교에 사용될 수 있는 목표값','Target만으로 방향·분모·성공 기준을 추론하지 않습니다.'),
   Total:entry('observation_comparison','전체값','전체 개수나 기준량으로 기록된 필드','전체값은 고정 분모나 완료 수와 동일하다고 보지 않습니다.'),
-  Trilemma:entry('activity_evidence_decision','삼중 제약','세 가지 선택지나 제약을 기록하는 필드','이름만으로 세 항의 정의·우선순위·판정식을 확정하지 않습니다.'),
+  Trilemma:entry('activity_evidence_decision','뮌하우젠 트릴레마 근거·증명 선택','뮌하우젠 트릴레마에 관한 근거나 증명 선택을 기록하는 필드','어떤 근거가 선택되었는지와 그 판정식은 원문 evaluator를 확인해야 합니다.'),
   Unit:entry('observation_comparison','단위','결과값의 단위','단위만으로 환산·분모·허용 범위를 결정하지 않습니다.'),
   Value:entry('observation_comparison','값','결과 레코드의 값','값 필드는 실행된 관측값이나 성공 결과와 동일하지 않습니다.'),
   Verdict:entry('activity_evidence_decision','최종 판정','결과에 기록된 판정 필드','판정의 우선순위·입력·권한은 해당 evaluator와 receipt를 확인해야 합니다.')
 };
 
-const guides={argument:argumentFieldGuide,result:resultFieldGuide};
+const guides=new Map([['argument',new Map(Object.entries(argumentFieldGuide))],['result',new Map(Object.entries(resultFieldGuide))]]);
 const unknownGuide=(kind,key)=>({group:'UNEXPLAINED',group_label:'해설 없음',name:key+' (해설 없음)',meaning:'현재 source field guide에 등록되지 않은 원문 필드입니다. 원문 키와 표현식만 관측합니다.',limit:'새 필드의 의미·수식·판정은 자동 추정하지 않고 별도 원문 확인이 필요합니다.',guide_status:'UNEXPLAINED',kind,key});
-export const fieldGuide=(kind,key)=>guides[kind]?.[key]?{...guides[kind][key],guide_status:'EXPLAINED',kind,key}:unknownGuide(kind,key);
+export const fieldGuide=(kind,key)=>guides.get(kind)?.get(key)?{...guides.get(kind).get(key),guide_status:'EXPLAINED',kind,key}:unknownGuide(kind,key);
 export const annotateFields=(fields,kind)=>Object.entries(fields??{}).map(([key,expression])=>({...fieldGuide(kind,key),field:key,expression}));
 export function observedFieldVocabulary(calls){
   const collect=(kind,field)=>[...new Set(calls.flatMap(call=>Object.keys(call[field]??{})))].sort();
   const argumentKeys=collect('argument','argument_expressions');
   const resultKeys=collect('result','result_field_expressions');
-  return {schema:'gooo/source-field-guide/v1',argument_keys:argumentKeys,result_keys:resultKeys,argument_count:argumentKeys.length,result_count:resultKeys.length,argument_guide_missing:argumentKeys.filter(key=>!argumentFieldGuide[key]),result_guide_missing:resultKeys.filter(key=>!resultFieldGuide[key])};
+  return {schema:'gooo/source-field-guide/v1',argument_keys:argumentKeys,result_keys:resultKeys,argument_count:argumentKeys.length,result_count:resultKeys.length,argument_guide_missing:argumentKeys.filter(key=>!guides.get('argument').has(key)),result_guide_missing:resultKeys.filter(key=>!guides.get('result').has(key))};
 }
