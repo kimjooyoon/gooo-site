@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: kimjooyoon/meta-ontology-go
-          ref: ab91e6ec8ae7d587acbfc3d041f6edacefc02f05
+          ref: 6c92cfa202008650b077afb2da7374fb102da169
           path: compiler
           persist-credentials: false
       - uses: actions/setup-go@v7
@@ -36,7 +36,7 @@ jobs:
           "$RUNNER_TEMP/gooo" check --json "$GITHUB_WORKSPACE/game/examples/relay-game/main.gooo" > "$RUNNER_TEMP/relay-evidence/check.json"
           "$RUNNER_TEMP/gooo" graph dump "$GITHUB_WORKSPACE/game/examples/relay-game/main.gooo" > "$RUNNER_TEMP/relay-evidence/graph.json"
           cp "$GITHUB_WORKSPACE/game/examples/relay-game/main.gooo" "$RUNNER_TEMP/relay-evidence/main.gooo"
-          printf '%s\n' 'Compiler: ab91e6ec8ae7d587acbfc3d041f6edacefc02f05' 'Scope: contract check and graph only; runtime forwarding and game semantics unverified.' > "$RUNNER_TEMP/relay-evidence/scope.txt"
+          printf '%s\n' 'Compiler: 6c92cfa202008650b077afb2da7374fb102da169' 'Scope: contract check and graph only; runtime forwarding and game semantics unverified.' > "$RUNNER_TEMP/relay-evidence/scope.txt"
           sha256sum "$RUNNER_TEMP/relay-evidence/main.gooo" > "$RUNNER_TEMP/relay-evidence/source.sha256"
       - name: Observe runtime forwarding, replay and rejected inputs
         if: ${{ !cancelled() }}

@@ -46,6 +46,6 @@ for (const [id, fields] of [['missing-direction', missing], ['numeric-turn', {..
   assert.equal(report.execution.apply_calls, 0);
   assert(report.failure && report.failure.code);
 }
-const receipt = {schema:'gooo-relay/runtime-observation/v1', decision:'PASS', scope:'FOUR_FIELD_RECORD_FORWARD_ONLY', compiler_sha:'ab91e6ec8ae7d587acbfc3d041f6edacefc02f05', site_sha:process.env.GITHUB_SHA, source_sha256:sourceDigest, semantic_fingerprint:first.report.semantic_fingerprint, cases_passed:3, cases_required:3, field_comparisons:4, field_comparisons_required:4, replay_comparisons:1, runtime_invocations:runs.length, runs, game_semantics:'UNIMPLEMENTED', stale_request_rejection:'BROWSER_ONLY_UNVERIFIED', external_utility:'UNASSESSED', improvement:'UNKNOWN'};
+const receipt = {schema:'gooo-relay/runtime-observation/v1', decision:'PASS', scope:'FOUR_FIELD_RECORD_FORWARD_ONLY', compiler_sha:'6c92cfa202008650b077afb2da7374fb102da169', site_sha:process.env.GITHUB_SHA, source_sha256:sourceDigest, semantic_fingerprint:first.report.semantic_fingerprint, cases_passed:3, cases_required:3, field_comparisons:4, field_comparisons_required:4, replay_comparisons:1, runtime_invocations:runs.length, runs, game_semantics:'UNIMPLEMENTED', stale_request_rejection:'BROWSER_ONLY_UNVERIFIED', external_utility:'UNASSESSED', improvement:'UNKNOWN'};
 writeFileSync(join(output, 'runtime-receipt.json'), JSON.stringify(receipt, null, 2));
 console.log(JSON.stringify(receipt));
