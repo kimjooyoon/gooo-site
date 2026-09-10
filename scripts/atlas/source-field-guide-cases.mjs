@@ -1,0 +1,32 @@
+import {readFile} from 'node:fs/promises';
+import {annotateFields,observedFieldVocabulary} from './source-field-guide.mjs';
+
+const receiptPath=process.argv[2];
+if(!receiptPath)throw Error('render receipt path is required');
+const receipt=JSON.parse(await readFile(receiptPath,'utf8'));
+const catalogPath=process.argv[3];
+if(!catalogPath)throw Error('catalog path is required');
+const catalog=JSON.parse(await readFile(catalogPath,'utf8'));
+const expectedArguments=['activity','actual','applicability','basisPoints','choice','class','comparator','consumer','evidence','exact','expected','family','id','kind','known','metric','metricID','name','observed','operation','pass','passed','producer','proof','proofChoice','reader','relation','resolution','route','satisfied','status','suffix','target','total','trilemma','unit','value'];
+const expectedResults=['Activity','Actual','Applicability','Choice','Class','Comparator','Consumer','EvidenceDigest','Expected','Family','ID','Kind','Limit','MetaOperation','MetricID','Observed','Passed','Producer','ProofChoice','Reader','Relation','Resolution','Route','Satisfied','State','Status','Target','Total','Trilemma','Unit','Value','Verdict'];
+const fail=message=>{throw Error(message)};
+const sameSet=(left,right)=>JSON.stringify([...left].sort())===JSON.stringify([...right].sort());
+const vocabulary=receipt.source_field_vocabulary;
+if(!vocabulary||vocabulary.argument_count!==37||vocabulary.result_count!==32||!sameSet(vocabulary.argument_keys,expectedArguments)||!sameSet(vocabulary.result_keys,expectedResults)||vocabulary.argument_guide_missing.length!==0||vocabulary.result_guide_missing.length!==0)fail('observed source field vocabulary is incomplete or changed');
+const futureFields=Object.create(null);
+futureFields.constructor='constructor.raw.expression';
+futureFields.toString='toString.raw.expression';
+Object.defineProperty(futureFields,'__proto__',{value:'__proto__.raw.expression',enumerable:true});
+const unknown=annotateFields(futureFields,'argument');
+if(unknown.length!==3||unknown.some(item=>item.guide_status!=='UNEXPLAINED'||item.group!=='UNEXPLAINED'||item.expression!==futureFields[item.field]))fail('prototype-named source fields were hidden or auto-explained');
+const unknownVocabulary=observedFieldVocabulary([{argument_expressions:futureFields,result_field_expressions:futureFields}]);
+if(!unknownVocabulary.argument_guide_missing.includes('constructor')||!unknownVocabulary.argument_guide_missing.includes('toString')||!unknownVocabulary.argument_guide_missing.includes('__proto__')||!unknownVocabulary.result_guide_missing.includes('constructor')||!unknownVocabulary.result_guide_missing.includes('toString')||!unknownVocabulary.result_guide_missing.includes('__proto__'))fail('prototype-named fields were omitted from missing-field detection');
+const known=annotateFields({value:'value.raw.expression'},'argument')[0];
+if(known.field!=='value'||known.expression!=='value.raw.expression'||known.guide_status!=='EXPLAINED')fail('known source field expression was not preserved');
+const sourceAuthorityCallsites=new Map([[20,['gooo.metric.semantic.source-authority-promotion-eligibility-bps.v1','eligible']],[21,['gooo.metric.evidence.assurance-denominator-binding-bps.v1','baselineOK']],[22,['gooo.metric.evidence.upstream-conformance-binding-bps.v1','evidenceOK']]]);
+const sourceAuthorityContracts=(catalog.source_contracts?.calls??[]).filter(record=>record.call?.path==='internal/meta/languageassurance/sourceauthoritypromotion/indicators.go'&&sourceAuthorityCallsites.has(record.call.line));
+if(sourceAuthorityContracts.length!==3||new Set(sourceAuthorityContracts.map(record=>record.call.line)).size!==3||sourceAuthorityContracts.some(record=>{
+  const expected=sourceAuthorityCallsites.get(record.call.line);
+  return record.call.kind!=='indicator_constructor_call'||record.helper?.path!=='internal/meta/languageassurance/sourceauthoritypromotion/indicators.go'||record.helper?.line!==29||record.helper?.kind!=='indicator_constructor_definition'||record.metric_id!==expected[0]||record.argument_expressions?.basisPoints!=='true'||record.argument_expressions?.satisfied!==expected[1]||record.result_field_expressions?.Unit!=='unit'||record.result_field_expressions?.Value!=='value';
+}))fail('sourceauthoritypromotion basisPoints source callsite/helper contract is missing, duplicated, or changed');
+console.log(JSON.stringify({schema:'gooo/source-field-guide-cases/v3',argument_keys:37,result_keys:32,argument_guide_missing:0,result_guide_missing:0,unknown_new_fields:['constructor','toString','__proto__'],unknown_new_field_status:'UNEXPLAINED',expression_preservation:'PASS',basis_points_source_contract_calls:3,basis_points_helper:'internal/meta/languageassurance/sourceauthoritypromotion/indicators.go:29',basis_points_callsites:[20,21,22]}));

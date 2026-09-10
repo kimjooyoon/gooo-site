@@ -2,6 +2,7 @@ import {readFile,writeFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {concepts,translateMetric} from './translations.mjs';
 import {narratives} from './narratives-ko.mjs';
+import {annotateFields,observedFieldVocabulary} from './source-field-guide.mjs';
 const [input,template,output]=process.argv.slice(2);
 function metricTraceability(metric,translation){
   const references=metric.references??[];
@@ -19,7 +20,10 @@ const atlas=JSON.parse(raw);
 if(atlas.schema!=='gooo/source-metric-atlas/v1'||!Array.isArray(atlas.concepts)||!Array.isArray(atlas.obligations)||!Array.isArray(atlas.metrics))throw Error('Unsupported source catalog');
 for(const concept of atlas.concepts){concept.translation=concepts[concept.id]?{title:concepts[concept.id][0],description:concepts[concept.id][1],state:'EDITORIAL'}:{title:concept.id,description:'한국어 해설 미작성. 원문을 유지합니다.',state:'MISSING'};}
 for(const concept of atlas.concepts){const n=narratives[concept.id];concept.narrative_ko=n?{problem:n[0],effect:n[1],state:'EDITORIAL_SOURCE_DECLARATION'}:null;for(const useCase of concept.use_cases){const translated=n?.[2][useCase.id];useCase.translation_ko=translated?{trigger:translated[0],expected:translated[1],state:'EDITORIAL_EXPECTATION_NOT_CURRENT_OBSERVATION'}:null;}}
-for(const metric of atlas.metrics)metric.source_contracts=(atlas.source_contracts?.calls??[]).filter(call=>call.metric_id===metric.id);
+const sourceCalls=atlas.source_contracts?.calls??[];
+const sourceFieldVocabulary=observedFieldVocabulary(sourceCalls);
+const guidedContract=call=>{const fieldGuides={arguments:annotateFields(call.argument_expressions,'argument'),results:annotateFields(call.result_field_expressions,'result')};for(const item of [...fieldGuides.arguments,...fieldGuides.results]){const source=(item.kind==='argument'?call.argument_expressions:call.result_field_expressions)?.[item.field];if(item.expression!==source)throw Error('Source field expression was not preserved for '+item.field)};return {...call,field_guides:fieldGuides}};
+for(const metric of atlas.metrics)metric.source_contracts=sourceCalls.filter(call=>call.metric_id===metric.id).map(guidedContract);
 const partialContracts=atlas.source_contracts?.partial_calls??[];
 const referenceKey=reference=>reference.path+'#'+reference.line+'#'+reference.kind;
 const sortedReferences=references=>references.map(referenceKey).sort();
@@ -28,6 +32,7 @@ const unresolvedReferenceMultiset=sortedReferences(atlas.source_contracts?.unres
 const sourceContractCohort={resolved_symbolic_calls:atlas.source_contracts?.calls?.length??0,unresolved_callsites:atlas.source_contracts?.unresolved_calls?.length??0,partial_contracts:partialContracts.length,recognized_constructor_callsites:(atlas.source_contracts?.calls?.length??0)+(atlas.source_contracts?.unresolved_calls?.length??0),partial_contracts_match_unresolved_calls:JSON.stringify(partialReferenceMultiset)===JSON.stringify(unresolvedReferenceMultiset),partial_reference_multiset_matches_unresolved_calls:JSON.stringify(partialReferenceMultiset)===JSON.stringify(unresolvedReferenceMultiset),partial_callsite_ids_unique:new Set(partialContracts.map(record=>record.callsite_id)).size===partialContracts.length};
 atlas.partial_contracts=partialContracts;
 atlas.source_contract_cohort=sourceContractCohort;
+atlas.source_field_vocabulary=sourceFieldVocabulary;
 for(const metric of atlas.metrics){const translation=translateMetric(metric.id);metric.translation={...translation,traceability:translation.untranslated_tokens.length?metricTraceability(metric,translation):null};}
 const untranslatedMetrics=atlas.metrics.filter(metric=>metric.translation.untranslated_tokens.length);
 const untranslatedIDs=untranslatedMetrics.map(metric=>metric.id);
@@ -45,7 +50,7 @@ const marker='<script id="atlas-data" type="application/json">null</script>';
 if(!html.includes(marker))throw Error('Atlas template marker absent');
 await writeFile(output,html.replace(marker,()=>`<script id="atlas-data" type="application/json">${json}</script>`));
 const partialStageCounts=Object.fromEntries([...new Set(partialContracts.map(record=>record.unknown?.stage??'UNKNOWN'))].sort().map(stage=>[stage,partialContracts.filter(record=>(record.unknown?.stage??'UNKNOWN')===stage).length]));
-const report={schema:'gooo/source-metric-atlas-render-receipt/v2',source_sha:atlas.source_sha,concepts:atlas.concepts.length,obligations:atlas.obligations.length,assurance_obligations:atlas.assurance_obligations.length,metric_ids_and_candidates:atlas.metrics.length,lexical_activity_declarations:atlas.activities.length,scanned_files:atlas.scanned_sources.length,excluded_files:atlas.excluded_paths.length,source_contract_cohort:sourceContractCohort,partial_contracts_by_stage:partialStageCounts,concept_translations_missing:atlas.concepts.filter(c=>c.translation.state==='MISSING').map(c=>c.id),metric_labels_with_untranslated_tokens:untranslatedIDs.length,metric_untranslated_ids:untranslatedIDs,metric_label_traceability_records:traceability,metric_label_traceability_counts:traceabilityCounts,current_conformance:'UNASSESSED'};
+const report={schema:'gooo/source-metric-atlas-render-receipt/v2',source_sha:atlas.source_sha,concepts:atlas.concepts.length,obligations:atlas.obligations.length,assurance_obligations:atlas.assurance_obligations.length,metric_ids_and_candidates:atlas.metrics.length,lexical_activity_declarations:atlas.activities.length,scanned_files:atlas.scanned_sources.length,excluded_files:atlas.excluded_paths.length,source_contract_cohort:sourceContractCohort,source_field_vocabulary:sourceFieldVocabulary,partial_contracts_by_stage:partialStageCounts,concept_translations_missing:atlas.concepts.filter(c=>c.translation.state==='MISSING').map(c=>c.id),metric_labels_with_untranslated_tokens:untranslatedIDs.length,metric_untranslated_ids:untranslatedIDs,metric_label_traceability_records:traceability,metric_label_traceability_counts:traceabilityCounts,current_conformance:'UNASSESSED'};
 await writeFile(output+'.receipt.json',JSON.stringify(report,null,2)+'\n');
 const narrativeCoverage={schema:'gooo/source-metric-atlas-translation-receipt/v2',source_sha:atlas.source_sha,concepts_total:atlas.concepts.length,concepts_translated:atlas.concepts.filter(c=>c.narrative_ko).length,usecases_total:atlas.concepts.reduce((n,c)=>n+c.use_cases.length,0),usecases_translated:atlas.concepts.reduce((n,c)=>n+c.use_cases.filter(u=>u.translation_ko).length,0),missing:atlas.concepts.flatMap(c=>[...(!c.narrative_ko?[c.id]:[]),...c.use_cases.filter(u=>!u.translation_ko).map(u=>c.id+'/'+u.id)]),metric_labels_with_untranslated_tokens:untranslatedIDs.length,metric_untranslated_ids:untranslatedIDs,metric_label_traceability_records:traceability,metric_label_traceability_counts:traceabilityCounts,scope:'EDITORIAL_TRANSLATION_COVERAGE_NOT_LANGUAGE_COMPLETION'};
 await writeFile(output+'.translations.json',JSON.stringify(narrativeCoverage,null,2)+'\n');
