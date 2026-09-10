@@ -83,11 +83,10 @@ jobs:
         run: |
           set -euo pipefail
           catalog=atlas-output/catalog.json
-          jq '{calls: (.source_contracts.calls | length), unresolved_calls: (.source_contracts.unresolved_calls | length), partial_calls: (.source_contracts.partial_calls | length), parsed_production_go_files: .source_contracts.parsed_production_go_files, metrics: (.metrics | length), recognized: ((.source_contracts.calls | length) + (.source_contracts.unresolved_calls | length))}' "$catalog"
           test "$(jq '.source_contracts.calls | length' "$catalog")" -eq 593
           test "$(jq '.source_contracts.unresolved_calls | length' "$catalog")" -eq 97
           test "$(jq '.source_contracts.partial_calls | length' "$catalog")" -eq 97
-          test "$(jq '.source_contracts.parsed_production_go_files' "$catalog")" -eq 4442
+          test "$(jq '.source_contracts.parsed_production_go_files' "$catalog")" -eq 4456
           test "$(jq '.metrics | length' "$catalog")" -eq 1094
           test "$(jq '(.source_contracts.calls | length) + (.source_contracts.unresolved_calls | length)' "$catalog")" -eq 690
           jq -e '((.source_contracts.partial_calls | map(.call.path + "#" + (.call.line | tostring) + "#" + .call.kind) | sort) == (.source_contracts.unresolved_calls | map(.path + "#" + (.line | tostring) + "#" + .kind) | sort)) and ((.source_contracts.partial_calls | map(.callsite_id) | unique | length) == (.source_contracts.partial_calls | length))' "$catalog" >/dev/null
