@@ -25,6 +25,7 @@ var releaseMetricSourceFiles = []string{
 type ReleaseFormulaField struct {
 	Expression         string    `json:"expression"`
 	ResolvedExpression string    `json:"resolved_expression,omitempty"`
+	ResolvedValue      string    `json:"resolved_value,omitempty"`
 	Resolution        string    `json:"resolution"`
 	Reference          Reference `json:"reference"`
 	ResolvedReference  Reference `json:"resolved_reference,omitempty"`
@@ -607,7 +608,7 @@ func releaseContractFromCall(call *ast.CallExpr, callReference Reference, functi
 
 func releaseStringTerm(expression ast.Expr, arrays map[string]releaseArray, localArrays map[string]releaseArray, rangeContext *releaseRange, rangeIndex int, files *token.FileSet, kind string) (string, ReleaseFormulaField, bool) {
 	field := releaseFormulaTerm(expression, arrays, localArrays, nil, rangeContext, rangeIndex, files, kind)
-	return field.ResolvedExpression, field, field.ResolvedExpression != "" && !strings.HasSuffix(field.Resolution, "_UNKNOWN") && field.Resolution != "CONTROL_FLOW_DEPENDENT_UNKNOWN"
+	return field.ResolvedValue, field, field.ResolvedValue != "" && !strings.HasSuffix(field.Resolution, "_UNKNOWN") && field.Resolution != "CONTROL_FLOW_DEPENDENT_UNKNOWN"
 }
 
 func releaseHelperResultFields(helper *ast.FuncDecl, files *token.FileSet) map[string]string {
@@ -687,6 +688,7 @@ func releaseFormulaTermAt(expression ast.Expr, arrays map[string]releaseArray, l
 	field.Reference.Path = files.Position(expression.Pos()).Filename
 	if literal, ok := releaseLiteralString(expression); ok {
 		field.ResolvedExpression = literal
+		field.ResolvedValue = literal
 		field.Resolution = "LITERAL_OR_SOURCE_ARRAY_RESOLVED"
 		return field
 	}
@@ -707,6 +709,7 @@ func releaseFormulaTermAt(expression ast.Expr, arrays map[string]releaseArray, l
 			resolved := releaseFormulaTermAt(values[0].expression, arrays, localArrays, scalars, rangeContext, rangeIndex, files, kind, depth+1, scalarStack)
 			delete(scalarStack, scalar.Name)
 			field.ResolvedExpression = resolved.Expression
+			field.ResolvedValue = resolved.ResolvedValue
 			field.ResolvedReference = resolved.Reference
 			field.Resolution = "SOURCE_SCALAR_RESOLVED"
 			if strings.HasSuffix(resolved.Resolution, "_UNKNOWN") {
@@ -728,6 +731,7 @@ func releaseFormulaTermAt(expression ast.Expr, arrays map[string]releaseArray, l
 				if known && position >= 0 && position < len(array.elements) {
 					resolved := releaseFormulaTermAt(array.elements[position], arrays, localArrays, scalars, nil, -1, files, kind, depth+1, scalarStack)
 					field.ResolvedExpression = resolved.Expression
+					field.ResolvedValue = resolved.ResolvedValue
 					field.ResolvedReference = array.references[position]
 					field.Resolution = "SOURCE_ARRAY_ELEMENT_RESOLVED"
 					if strings.HasSuffix(resolved.Resolution, "_UNKNOWN") {
@@ -747,6 +751,7 @@ func releaseFormulaTermAt(expression ast.Expr, arrays map[string]releaseArray, l
 	if identifier, ok := expression.(*ast.Ident); ok && rangeContext != nil && identifier.Name == rangeContext.valueName && rangeIndex >= 0 && rangeIndex < len(rangeContext.array.elements) {
 		resolved := releaseFormulaTermAt(rangeContext.array.elements[rangeIndex], arrays, localArrays, scalars, nil, -1, files, kind, depth+1, scalarStack)
 		field.ResolvedExpression = resolved.Expression
+		field.ResolvedValue = resolved.ResolvedValue
 		field.ResolvedReference = rangeContext.array.references[rangeIndex]
 		field.Resolution = "SOURCE_ARRAY_ELEMENT_RESOLVED"
 		if strings.HasSuffix(resolved.Resolution, "_UNKNOWN") {
@@ -777,7 +782,7 @@ func releaseString(expression ast.Expr, arrays map[string]releaseArray, rangeCon
 	if value, ok := releaseLiteralString(expression); ok {
 		return value, true
 	}
-	return field.ResolvedExpression, field.ResolvedExpression != ""
+	return field.ResolvedValue, field.ResolvedValue != ""
 }
 
 func releaseLiteralString(expression ast.Expr) (string, bool) {

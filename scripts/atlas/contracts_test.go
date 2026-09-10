@@ -211,7 +211,7 @@ func TestCollectReleaseMetricContractsPreservesSupportedSourceShapes(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if inventory.MetricCount != 3 || inventory.OwnerCount != 3 || len(inventory.Contracts) != 3 || len(inventory.Unknowns) != 0 || inventory.CompleteFormulaCount != 3 {
+	if inventory.MetricCount != 3 || inventory.OwnerCount != 3 || len(inventory.Contracts) != 3 || len(inventory.Unknowns) != 0 || inventory.CompleteFormulaCount != 3 || !reflect.DeepEqual(inventory.MetricIDs, []string{"gooo.metric.fixture.outcome", "gooo.metric.fixture.driver", "gooo.metric.fixture.guardrail"}) {
 		t.Fatalf("normal release fixture = metric %d owner %d contracts %d complete %d unknown %d", inventory.MetricCount, inventory.OwnerCount, len(inventory.Contracts), inventory.CompleteFormulaCount, len(inventory.Unknowns))
 	}
 	var driver ReleaseMetricContract
@@ -220,7 +220,7 @@ func TestCollectReleaseMetricContractsPreservesSupportedSourceShapes(t *testing.
 			driver = contract
 		}
 	}
-	if driver.Formula.Actual.Expression != "values[index]" || driver.Formula.Actual.ResolvedExpression != "s.First" || driver.Formula.Expected.ResolvedExpression != "1" || driver.HelperResultFields["Value"] != "value" || driver.HelperResultFields["Target"] != "target" {
+	if driver.Formula.Actual.Expression != "values[index]" || driver.Formula.Actual.ResolvedExpression != "s.First" || driver.Formula.Expected.ResolvedExpression != "1" || driver.ProofChoice != "COHERENCE" || driver.Formula.Comparator.ResolvedExpression != "greater_or_equal" || driver.HelperResultFields["Value"] != "value" || driver.HelperResultFields["Target"] != "target" {
 		t.Fatalf("source-array element binding was not preserved: %+v", driver)
 	}
 }
