@@ -106,11 +106,15 @@ func export() error {
 			}
 		}
 	}
+	contracts,err:=collectContracts(sources)
+	if err!=nil{return err}
+	for _,contract:=range contracts.Calls {
+		metric:=ensure(contract.MetricID)
+		metric.References=append(metric.References,contract.Call)
+	}
 	metrics := make([]*Metric,0,len(ids))
 	for _, metric := range ids { metrics=append(metrics,metric) }
 	sort.Slice(metrics,func(i,j int)bool{return metrics[i].ID<metrics[j].ID})
-	contracts,err:=collectContracts(sources)
-	if err!=nil{return err}
 	value := map[string]any{
 		"schema":"gooo/source-metric-atlas/v1", "source_repository":"kimjooyoon/meta-ontology-go", "source_sha":commit,
 		"observation_state":"SOURCE_CATALOG_ONLY", "current_conformance":nil,
