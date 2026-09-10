@@ -43,6 +43,27 @@ jobs:
           go run -mod=readonly ./cmd/metric-atlas-export > "$GITHUB_WORKSPACE/atlas-output/catalog.json"
       - name: Render source-backed map and record collection scope
         run: node scripts/atlas/render.mjs atlas-output/catalog.json scripts/atlas/template.html atlas-output/metric-map.html
+      - name: Verify partial source contracts and preserved cohort
+        shell: bash
+        run: |
+          set -euo pipefail
+          catalog=atlas-output/catalog.json
+          test "$(jq '.source_contracts.calls | length' "$catalog")" -eq 593
+          test "$(jq '.source_contracts.unresolved_calls | length' "$catalog")" -eq 97
+          test "$(jq '.source_contracts.partial_calls | length' "$catalog")" -eq 97
+          test "$(jq '.source_contracts.parsed_production_go_files' "$catalog")" -eq 4442
+          test "$(jq '.metrics | length' "$catalog")" -eq 1094
+          test "$(jq '(.source_contracts.calls | length) + (.source_contracts.unresolved_calls | length)' "$catalog")" -eq 690
+          jq -e '.source_contracts.partial_calls | map(select(.call.path == "internal/meta/externalcapabilityexecution/assuranceeligibility/indicators.go" and .call.line == 11)) | if length == 1 then .[0] else error("assuranceeligibility partial callsite missing or duplicated") end | select((has("metric_id") | not) and ([.call_argument_expressions[] | select(contains("artifact.Name"))] | length > 0) and (.helper_candidates | length > 0) and (.helper_candidates[0].result_field_sets | length > 0) and (.unknown.missing_fields | index("metric_id") != null) and (.unknown.blocked_by | type == "array"))' "$catalog" >/dev/null
+          jq -e '.source_contracts.partial_calls | map(select(.call.path == "internal/meta/externalcapabilityexecution/authorization/indicators.go" and .call.line == 25)) | if length == 1 then .[0] else error("authorization partial callsite missing or duplicated") end | select((has("metric_id") | not) and ([.call_argument_expressions[] | select(contains("spec"))] | length > 0) and ([.call_argument_expressions[] | select(contains("states[index]"))] | length > 0) and (.helper_candidates | length > 0) and (.helper_candidates[0].argument_expressions | length > 0) and (.helper_candidates[0].result_field_sets | length > 0) and (.unknown.missing_fields | index("metric_id") != null))' "$catalog" >/dev/null
+          jq -e '.source_contracts.partial_calls | all(.unknown | (.stage != "HELPER_SELECTION" or (.unknown_class == "DEPENDENCY_BLOCKED" and (.blocked_by | type == "array" and length > 0))))' "$catalog" >/dev/null
+          jq -e '.source_contracts.partial_calls | all(.unknown | (.stage != "ARGUMENT_BINDING" or (.unknown_class == "DIRECT_MISSING" and (.blocked_by | type == "array" and length == 0))))' "$catalog" >/dev/null
+          jq -e '.source_contracts.partial_calls | all((has("metric_id") | not) and (.resolution == "PARTIAL_SOURCE_CONTRACT_UNKNOWN_NOT_RUNTIME_PROOF") and (.unknown.stage != "" or error("partial stage missing")) and (.unknown.step != "" or error("partial step missing")) and (.unknown.reason != "" or error("partial reason missing")) and (.unknown.unknown_class != "" or error("partial class missing")) and (.unknown.next_operation != "" or error("partial next operation missing")) and (.unknown.blocked_by | type == "array") and (.unknown.missing_fields | type == "array"))' "$catalog" >/dev/null
+          {
+            echo '## Partial source contract checks'
+            echo
+            jq '{source_contract_cohort: .source_contracts | {resolved_symbolic_calls: (.calls | length), unresolved_callsites: (.unresolved_calls | length), partial_contracts: (.partial_calls | length), recognized_constructor_callsites: ((.calls | length) + (.unresolved_calls | length))}, partial_stage_counts: ([.source_contracts.partial_calls[].unknown.stage] | sort | group_by(.) | map({stage: .[0], count: length}) )}' "$catalog"
+          } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: language-metric-atlas-${{ github.event.pull_request.head.sha || github.sha }}
