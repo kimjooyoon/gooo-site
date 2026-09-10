@@ -19,6 +19,8 @@ jobs:
           persist-credentials: false
       - name: Check structure, build static files and report cost
         run: node scripts/check.mjs
+      - name: Test browser to Gooo request boundary
+        run: node --test scripts/relay-request.test.mjs
       - uses: actions/upload-pages-artifact@v4
         with:
           path: dist

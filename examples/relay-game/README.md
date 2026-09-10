@@ -5,9 +5,11 @@ planner is deterministic, not an LLM. External AI interaction is manual and
 uses the same strict request envelope as human input.
 
 The Gooo contract forwards four string fields. The browser uses a numeric turn;
-a future runtime adapter must explicitly serialize it to the contract's string
-representation and compare returned fields. The current browser does not invoke
-Gooo. Contract check/graph success cannot establish runtime or game correctness.
+the shared relay-request.mjs adapter serializes safe nonnegative turns to decimal
+strings. Browser exports include this Gooo input, and runtime CI uses the same
+adapter. This is conversion, not Gooo execution in the browser or stale-turn
+authorization. Null exported inputs mean request shape conversion failed.
+Contract check/graph success cannot establish runtime or game correctness.
 
 The manual Relay contract observation workflow pins compiler source to
 6c92cfa202008650b077afb2da7374fb102da169 and captures contract evidence separately.
