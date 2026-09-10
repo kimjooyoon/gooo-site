@@ -10,7 +10,7 @@ export const argumentFieldGuide={
   activity:entry('identity_scope','활동 이름','호출이나 선언이 연결하려는 활동의 원문 이름','이름의 존재만으로 실행·등록·유효한 binding을 증명하지 않습니다.'),
   actual:entry('observation_comparison','실제값 표현식','비교에 제공하려는 실제값의 원문 표현식','표현식만 보존하며 실행 결과나 산출 시점을 뜻하지 않습니다.'),
   applicability:entry('observation_comparison','적용 가능성','조건이나 규칙이 적용되는지 나타내려는 표현식','이름만으로 적용 범위와 판정 방향을 확정하지 않습니다.'),
-  basisPoints:entry('observation_comparison','만분율 값 표현식','진척 또는 차이를 만분율 값으로 적으려는 표현식','실제 지표의 분자·분모·성공은 이 이름이나 표현식만으로 추론하지 않습니다.'),
+  basisPoints:entry('observation_comparison','만분율 단위 선택 인자','현재 sourceauthoritypromotion.indicator helper에서 Unit을 basis_points로 선택할지 paths로 선택하는 bool 인자입니다. 이 세 source callsite는 true를 전달합니다.','이 설명은 해당 helper의 Unit 선택에 한정됩니다. Value의 0/10000은 satisfied가 별도로 결정하며, 분모·성공·다른 동명의 인자 의미는 여기서 추론하지 않습니다.'),
   choice:entry('actors_provenance','증명 선택','선택한 증명 방식의 원문 표현식','선택된 증명 방식은 현재 증거의 존재나 충족을 의미하지 않습니다.'),
   class:entry('actors_provenance','역할 분류','지표나 항목의 역할 분류를 적으려는 표현식','분류는 관측 상태나 성공/실패 상태가 아닙니다.'),
   comparator:entry('observation_comparison','비교 연산자','두 값을 비교할 때 사용할 연산자의 원문 표현식','실제 수식의 피연산자·방향·분모는 이 필드만으로 복원하지 않습니다.'),
