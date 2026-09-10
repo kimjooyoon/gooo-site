@@ -29,6 +29,7 @@ export function validateReleaseMetricBindings(atlas,expectedMetricIDs,expectedSo
   const classCounts=Object.fromEntries(requiredClasses.map(className=>[className,contracts.filter(contract=>contract.class===className).length]));
   if(collection.class_counts?.OUTCOME!==classCounts.OUTCOME||collection.class_counts?.DRIVER!==classCounts.DRIVER||collection.class_counts?.GUARDRAIL!==classCounts.GUARDRAIL)return fail('RELEASE_FORMULA_CLASS_COUNT_CONTRADICTION','RECONCILE_RELEASE_FORMULA_CLASS_COUNTS');
   for(const record of collection.unknowns)if(!unknownRecordWellFormed(record))return fail('MALFORMED_RELEASE_FORMULA_UNKNOWN_RECORD','REJECT_MALFORMED_RELEASE_FORMULA_UNKNOWN');
+  for(const contract of contracts)if(contract.helper_result_fields?.MetricID!=='id'||contract.helper_result_fields?.Class!=='class'||contract.helper_result_fields?.ProofChoice!=='proof'||contract.helper_result_fields?.Value!=='value'||contract.helper_result_fields?.Target!=='target'||contract.helper_result_fields?.Relation!=='relation')return fail('RELEASE_INDICATOR_HELPER_FIELD_MAPPING_CONTRADICTION','REJECT_RELEASE_INDICATOR_HELPER_MAPPING');
   if(collection.unknowns.length)return releaseBindingUnknown('RELEASE_FORMULA_SOURCE_CONTAINS_UNRESOLVED_SHAPES','RESOLVE_RELEASE_FORMULA_SOURCE_DATAFLOW','DEPENDENCY_BLOCKED',collection.unknowns.flatMap(record=>record.blocked_by));
   const incomplete=[];
   for(const contract of contracts){

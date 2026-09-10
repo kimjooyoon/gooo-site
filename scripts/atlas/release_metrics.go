@@ -90,6 +90,7 @@ type ReleaseMetricContractInventory struct {
 type releaseArray struct {
 	elements   []ast.Expr
 	references []Reference
+	duplicate   bool
 }
 
 type releaseSourceUnit struct {
@@ -335,6 +336,14 @@ func releaseArraysInFunction(function *ast.FuncDecl, path string, files *token.F
 	if function.Body == nil {
 		return arrays
 	}
+	recordArray := func(name string, array releaseArray) {
+		if previous, exists := arrays[name]; exists {
+			previous.duplicate = true
+			arrays[name] = previous
+			return
+		}
+		arrays[name] = array
+	}
 	ast.Inspect(function.Body, func(node ast.Node) bool {
 		switch declaration := node.(type) {
 		case *ast.AssignStmt:
@@ -347,7 +356,7 @@ func releaseArraysInFunction(function *ast.FuncDecl, path string, files *token.F
 					continue
 				}
 				if array, ok := releaseArrayFromExpression(declaration.Rhs[index], path, files); ok {
-					arrays[name.Name] = array
+					recordArray(name.Name, array)
 				}
 			}
 		case *ast.DeclStmt:
@@ -362,7 +371,7 @@ func releaseArraysInFunction(function *ast.FuncDecl, path string, files *token.F
 				}
 				for index, name := range value.Names {
 					if array, ok := releaseArrayFromExpression(value.Values[index], path, files); ok {
-						arrays[name.Name] = array
+						recordArray(name.Name, array)
 					}
 				}
 			}
@@ -732,6 +741,10 @@ func releaseFormulaTermAt(expression ast.Expr, arrays map[string]releaseArray, l
 				array, found = arrays[arrayName.Name]
 			}
 			if found {
+				if array.duplicate {
+					field.Resolution = "SOURCE_ARRAY_BINDING_DUPLICATE_UNKNOWN"
+					return field
+				}
 				position, known := releaseIndexValue(index.Index, rangeContext, rangeIndex)
 				if known && position >= 0 && position < len(array.elements) {
 					resolved := releaseFormulaTermAt(array.elements[position], arrays, localArrays, scalars, nil, -1, files, kind, depth+1, scalarStack)

@@ -233,13 +233,28 @@ func TestCollectReleaseMetricContractsLowersUnsupportedShapes(t *testing.T) {
 		wantUnknown string
 	}{
 		{
-			name: "short values and targets arrays",
+			name: "short actual array",
 			mutate: func(files map[string]string) {
 				files["internal/meta/languagereadiness/toolchainrelease/metrics.go"] = strings.Replace(files["internal/meta/languagereadiness/toolchainrelease/metrics.go"], "var driverMetricIDs = []string{\"gooo.metric.fixture.driver\"}", "var driverMetricIDs = []string{\"gooo.metric.fixture.driver\", \"gooo.metric.fixture.driver.two\"}", 1)
-				files["internal/meta/languagereadiness/toolchainrelease/indicator_drivers.go"] = strings.Replace(files["internal/meta/languagereadiness/toolchainrelease/indicator_drivers.go"], "values := []int{s.First}", "values := []int{s.First}", 1)
+				driver := files["internal/meta/languagereadiness/toolchainrelease/indicator_drivers.go"]
+				driver = strings.Replace(driver, "proofs := []string{\"COHERENCE\"}", "proofs := []string{\"COHERENCE\", \"COHERENCE\"}", 1)
+				driver = strings.Replace(driver, "targets := []int{1}", "targets := []int{1, 1}", 1)
+				files["internal/meta/languagereadiness/toolchainrelease/indicator_drivers.go"] = driver
 			},
 			wantMetric: "3",
-			wantUnknown: "PROOF_BINDING",
+			wantUnknown: "FORMULA_BINDING",
+		},
+		{
+			name: "short target array",
+			mutate: func(files map[string]string) {
+				files["internal/meta/languagereadiness/toolchainrelease/metrics.go"] = strings.Replace(files["internal/meta/languagereadiness/toolchainrelease/metrics.go"], "var driverMetricIDs = []string{\"gooo.metric.fixture.driver\"}", "var driverMetricIDs = []string{\"gooo.metric.fixture.driver\", \"gooo.metric.fixture.driver.two\"}", 1)
+				driver := files["internal/meta/languagereadiness/toolchainrelease/indicator_drivers.go"]
+				driver = strings.Replace(driver, "values := []int{s.First}", "values := []int{s.First, s.Second}", 1)
+				driver = strings.Replace(driver, "proofs := []string{\"COHERENCE\"}", "proofs := []string{\"COHERENCE\", \"COHERENCE\"}", 1)
+				files["internal/meta/languagereadiness/toolchainrelease/indicator_drivers.go"] = driver
+			},
+			wantMetric: "3",
+			wantUnknown: "FORMULA_BINDING",
 		},
 		{
 			name: "duplicate metric owner",
@@ -256,6 +271,16 @@ func TestCollectReleaseMetricContractsLowersUnsupportedShapes(t *testing.T) {
 			},
 			wantMetric: "0",
 			wantUnknown: "HELPER_BINDING",
+		},
+		{
+			name: "duplicate local array binding",
+			mutate: func(files map[string]string) {
+				driver := files["internal/meta/languagereadiness/toolchainrelease/indicator_drivers.go"]
+				driver = strings.Replace(driver, "values := []int{s.First}", "values := []int{s.First}\n\tvalues = []int{s.Second}", 1)
+				files["internal/meta/languagereadiness/toolchainrelease/indicator_drivers.go"] = driver
+			},
+			wantMetric: "2",
+			wantUnknown: "FORMULA_BINDING",
 		},
 		{
 			name: "cyclic scalar assignment",
