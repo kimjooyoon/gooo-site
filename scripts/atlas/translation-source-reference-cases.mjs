@@ -1,0 +1,23 @@
+import {readFile} from 'node:fs/promises';
+import {validateSourceReferences,pinnedSourceSHA} from './source-reference-validation.mjs';
+
+const receiptPath=process.argv[2],sourceRoot=process.argv[3];
+if(!receiptPath||!sourceRoot)throw Error('render receipt and disposable source root are required');
+const receipt=JSON.parse(await readFile(receiptPath,'utf8'));
+const fail=message=>{throw Error(message)};
+const records=receipt.metric_label_traceability_records??[];
+const validation=receipt.source_reference_validation;
+if(!validation||validation.state!=='SOURCE_HEAD_VALIDATED'||validation.source_head_sha!==pinnedSourceSHA||validation.validated_records!==47||receipt.metric_translation_cohort.source_reference_state!=='SOURCE_HEAD_VALIDATED'||receipt.metric_translation_cohort.source_reference_head!==pinnedSourceSHA||receipt.metric_translation_cohort.source_backed_count!==validation.validated_records)fail('render did not bind source-backed status to validated pinned references');
+const first=records[0];
+const badPath=structuredClone(first);badPath.source_evidence[0].path='missing/source.go';
+if((await validateSourceReferences([badPath],sourceRoot)).state!=='FAIL_CLOSED')fail('missing source path was accepted');
+const badLine=structuredClone(first);badLine.source_evidence[0].line=999999;
+if((await validateSourceReferences([badLine],sourceRoot)).state!=='FAIL_CLOSED')fail('out-of-range source line was accepted');
+const badAnchor=structuredClone(first);badAnchor.source_evidence[0].symbol='display-owner-remains-human-readable';badAnchor.source_evidence[0].anchor='anchor-that-is-not-in-pinned-source';
+if((await validateSourceReferences([badAnchor],sourceRoot)).state!=='FAIL_CLOSED')fail('incorrect source anchor was accepted');
+const absence=structuredClone(records.find(record=>record.identifier==='gooo.metric.bx.absence-not-deletion.v1'));absence.source_evidence[0].line=145;
+if((await validateSourceReferences([absence],sourceRoot)).state!=='FAIL_CLOSED')fail('a different in-range declaration line was accepted');
+if((await validateSourceReferences(records,sourceRoot,'0000000000000000000000000000000000000000')).state!=='FAIL_CLOSED')fail('different source head was accepted');
+if((await validateSourceReferences(records,'.',pinnedSourceSHA)).state!=='FAIL_CLOSED')fail('different source root with matching SHA string was accepted');
+if(!validation.validated_references||validation.validated_references<47)fail('validated reference count was not recorded');
+console.log(JSON.stringify({schema:'gooo/source-metric-atlas-source-reference-cases/v1',source_head_sha:pinnedSourceSHA,records:47,validated_references:validation.validated_references,state:'SOURCE_HEAD_VALIDATED',counterexamples:{missing_path:'FAIL_CLOSED',out_of_range_line:'FAIL_CLOSED',wrong_anchor_with_original_identifier:'FAIL_CLOSED',different_in_range_declaration_line:'FAIL_CLOSED',different_source_head:'FAIL_CLOSED',different_source_root_with_matching_sha_string:'FAIL_CLOSED'},meaning_boundary:'source declaration anchor validation does not prove the whole Korean explanation or current runtime success'}));
