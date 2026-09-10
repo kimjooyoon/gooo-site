@@ -49,6 +49,21 @@ jobs:
           go test -mod=readonly ./cmd/metric-atlas-export
       - name: Render source-backed map and record collection scope
         run: node scripts/atlas/render.mjs atlas-output/catalog.json scripts/atlas/template.html atlas-output/metric-map.html
+      - name: Verify source field guide vocabulary and unknown-field handling
+        shell: bash
+        run: |
+          set -euo pipefail
+          receipt=atlas-output/metric-map.html.receipt.json
+          catalog=atlas-output/catalog.json
+          test "$(jq '.source_field_vocabulary.argument_count' "$receipt")" -eq 37
+          test "$(jq '.source_field_vocabulary.result_count' "$receipt")" -eq 32
+          test "$(jq '.source_field_vocabulary.argument_guide_missing | length' "$receipt")" -eq 0
+          test "$(jq '.source_field_vocabulary.result_guide_missing | length' "$receipt")" -eq 0
+          test "$(jq '.metric_ids_and_candidates' "$receipt")" -eq 1094
+          test "$(jq '.metric_labels_with_untranslated_tokens' "$receipt")" -eq 47
+          test "$(jq '.concepts' "$receipt")" -eq 29
+          test "$(jq '[.concepts[].use_cases] | add | length' "$catalog")" -eq 57
+          node scripts/atlas/source-field-guide-cases.mjs "$receipt" | tee "$RUNNER_TEMP/source-field-guide-cases.json"
       - name: Verify partial source contracts and preserved cohort
         shell: bash
         run: |
@@ -73,6 +88,7 @@ jobs:
             echo
             jq '{source_contract_cohort: .source_contracts | {resolved_symbolic_calls: (.calls | length), unresolved_callsites: (.unresolved_calls | length), partial_contracts: (.partial_calls | length), recognized_constructor_callsites: ((.calls | length) + (.unresolved_calls | length))}, partial_stage_counts: ([.source_contracts.partial_calls[].unknown.stage] | sort | group_by(.) | map({stage: .[0], count: length}) )}' "$catalog"
             cat "$RUNNER_TEMP/partial-contract-cases.json"
+            cat "$RUNNER_TEMP/source-field-guide-cases.json"
             echo
             echo 'AST fixture test: executed against collectContracts in the disposable upstream source copy'
           } >> "$GITHUB_STEP_SUMMARY"
