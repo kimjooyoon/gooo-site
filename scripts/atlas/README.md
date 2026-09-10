@@ -6,6 +6,7 @@ The atlas is a documentation consumer, not a language readiness evaluator.
 
 - `export.go` invokes existing upstream registries from a pinned source checkout.
 - `contracts.go` preserves package-local Indicator constructor arguments and result expressions using the Go AST. It does not execute those expressions.
+- `contracts.go` additionally preserves each helper's Go-AST-rendered declaration signature and ordered parameter groups (`names`, `type_expression`, `variadic`) under additive `helper_signature` fields. This is the source spelling only: it is not `go/types` validation, alias resolution, or execution compatibility evidence. The legacy `parameters`, argument expressions, source coordinates, and UNKNOWN frontier remain unchanged.
 - `contracts.go` keeps resolved symbolic contracts in `calls` and records the same unresolved helper callsites separately in `partial_calls`, retaining source argument and candidate-helper result expressions without inventing a metric ID.
 - A partial record is an UNKNOWN source observation, not a resolved metric contract or runtime evidence. Its source-SHA/package/path/line coordinate, missing fields, stable blocking frontier, and next operation are part of the inspectable record.
 - `partial-contract-cases.mjs` is an Actions-only schema check: it exercises the real cohort plus explicit ambiguous-helper, argument-binding, and malformed-promotion counterexamples. Synthetic counterexamples do not increase the source cohort.

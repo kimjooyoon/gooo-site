@@ -17,9 +17,22 @@ type ContractCall struct {
 	Package string `json:"package_scope"`
 	Call Reference `json:"call"`
 	Helper Reference `json:"helper"`
+	HelperSignature HelperSignature `json:"helper_signature"`
 	Arguments map[string]string `json:"argument_expressions"`
 	ResultFields map[string]string `json:"result_field_expressions"`
 	Resolution string `json:"resolution"`
+}
+
+type ParameterDeclaration struct {
+	Names []string `json:"names"`
+	TypeExpression string `json:"type_expression"`
+	Variadic bool `json:"variadic"`
+}
+
+type HelperSignature struct {
+	Declaration string `json:"declaration"`
+	Parameters []ParameterDeclaration `json:"parameters"`
+	TypeSource string `json:"type_source"`
 }
 
 type PartialUnknown struct {
@@ -37,6 +50,7 @@ type PartialHelper struct {
 	Name string `json:"name"`
 	Reference Reference `json:"reference"`
 	Parameters []string `json:"parameters"`
+	HelperSignature HelperSignature `json:"helper_signature"`
 	ArgumentExpressions map[string]string `json:"argument_expressions,omitempty"`
 	ResultFieldSets []map[string]string `json:"result_field_sets"`
 }
@@ -94,9 +108,11 @@ func collectContracts(sources []Source, sourceSHA string) (ContractInventory,err
 	}
 	render:=func(node ast.Node)string{var out bytes.Buffer;_ = printer.Fprint(&out,files,node);return out.String()}
 	coordinate:=func(scope,path string,line int,role string)string{return "source-sha:"+sourceSHA+"|package:"+scope+"|path:"+filepath.ToSlash(path)+"|line:"+strconv.Itoa(line)+"|role:"+role}
-	parameters:=func(function *ast.FuncDecl)[]string{names:=[]string{};for _,field:=range function.Type.Params.List{for _,name:=range field.Names{names=append(names,name.Name)}};return names}
+	parameterDeclarations:=func(function *ast.FuncDecl)[]ParameterDeclaration{declarations:=[]ParameterDeclaration{};for _,field:=range function.Type.Params.List{names:=[]string{};for _,name:=range field.Names{names=append(names,name.Name)};_,variadic:=field.Type.(*ast.Ellipsis);declarations=append(declarations,ParameterDeclaration{Names:names,TypeExpression:render(field.Type),Variadic:variadic})};return declarations}
+	helperSignature:=func(function *ast.FuncDecl)HelperSignature{typeExpression:=render(function.Type);typeExpression=strings.TrimPrefix(typeExpression,"func");return HelperSignature{Declaration:"func "+function.Name.Name+typeExpression,Parameters:parameterDeclarations(function),TypeSource:"GO_AST_TYPE_EXPRESSION_ONLY_NOT_GO_TYPES"}}
+	parameters:=func(function *ast.FuncDecl)[]string{names:=[]string{};for _,declaration:=range parameterDeclarations(function){names=append(names,declaration.Names...)};return names}
 	resultFieldSets:=func(function *ast.FuncDecl)[]map[string]string{sets:=[]map[string]string{};if function.Body==nil{return sets};ast.Inspect(function.Body,func(node ast.Node)bool{literal,ok:=node.(*ast.CompositeLit);if !ok{return true};typeName:="";switch t:=literal.Type.(type){case *ast.Ident:typeName=t.Name;case *ast.SelectorExpr:typeName=t.Sel.Name};if typeName!="Indicator"{return true};fields:=map[string]string{};for _,element:=range literal.Elts{kv,ok:=element.(*ast.KeyValueExpr);if !ok{continue};key,ok:=kv.Key.(*ast.Ident);if ok{fields[key.Name]=render(kv.Value)}};sets=append(sets,fields);return true});return sets}
-	partialHelper:=func(scope string,helper constructor,callArgs []string)PartialHelper{line:=files.Position(helper.function.Pos()).Line;names:=parameters(helper.function);candidate:=PartialHelper{CandidateID:coordinate(scope,helper.path,line,"helper_candidate"),Name:helper.function.Name.Name,Reference:Reference{helper.path,line,"indicator_constructor_definition"},Parameters:names,ResultFieldSets:resultFieldSets(helper.function)};if len(names)==len(callArgs){candidate.ArgumentExpressions=map[string]string{};for i,name:=range names{candidate.ArgumentExpressions[name]=callArgs[i]}};return candidate}
+	partialHelper:=func(scope string,helper constructor,callArgs []string)PartialHelper{line:=files.Position(helper.function.Pos()).Line;names:=parameters(helper.function);candidate:=PartialHelper{CandidateID:coordinate(scope,helper.path,line,"helper_candidate"),Name:helper.function.Name.Name,Reference:Reference{helper.path,line,"indicator_constructor_definition"},Parameters:names,HelperSignature:helperSignature(helper.function),ResultFieldSets:resultFieldSets(helper.function)};if len(names)==len(callArgs){candidate.ArgumentExpressions=map[string]string{};for i,name:=range names{candidate.ArgumentExpressions[name]=callArgs[i]}};return candidate}
 	makePartial:=func(reference Reference,scope string,callArgs []string,matches []constructor,stage,reason,unknownClass,nextOperation string,missingFields,blockedBy []string)PartialContract{partial:=PartialContract{CallsiteID:coordinate(scope,reference.Path,reference.Line,"callsite"),SourceSHA:sourceSHA,Package:scope,Call:reference,CallArgumentExpressions:callArgs,HelperCandidates:[]PartialHelper{},Unknown:PartialUnknown{Stage:stage,Step:"COLLECT_PARTIAL_SOURCE_CONTRACT",Reason:reason,UnknownClass:unknownClass,NextOperation:nextOperation,BlockedBy:blockedBy,MissingFields:missingFields},Resolution:"PARTIAL_SOURCE_CONTRACT_UNKNOWN_NOT_RUNTIME_PROOF"};for _,helper:=range matches{candidate:=partialHelper(scope,helper,callArgs);partial.HelperCandidates=append(partial.HelperCandidates,candidate)};if len(partial.HelperCandidates)==1&&len(partial.HelperCandidates[0].ArgumentExpressions)>0{partial.ArgumentExpressions=partial.HelperCandidates[0].ArgumentExpressions};return partial}
 	var resolve func(ast.Expr,string,int)(string,bool)
 	resolve=func(expr ast.Expr,scope string,depth int)(string,bool){
@@ -122,7 +138,7 @@ func collectContracts(sources []Source, sourceSHA string) (ContractInventory,err
 			if len(parameterNames)!=len(call.Args)||len(call.Args)==0{result.UnresolvedCalls=append(result.UnresolvedCalls,reference);result.PartialCalls=append(result.PartialCalls,makePartial(reference,unit.scope,callArgs,matches,"ARGUMENT_BINDING","ARGUMENT_ARITY_OR_EMPTY_ARGUMENTS","DIRECT_MISSING","BIND_ARGUMENTS_WITH_SOURCE_ARITY",[]string{"argument_expressions"},[]string{}));return true}
 			id,resolved:=constructorMetricIdentity(helper.function,call.Args,unit.scope,resolve)
 			if !resolved||id==""{result.UnresolvedCalls=append(result.UnresolvedCalls,reference);result.PartialCalls=append(result.PartialCalls,makePartial(reference,unit.scope,callArgs,matches,"STATIC_METRIC_IDENTITY","METRIC_ID_DYNAMIC_OR_UNRESOLVED","DIRECT_MISSING","RESOLVE_METRIC_IDENTITY_FROM_SOURCE_DATAFLOW",[]string{"metric_id"},[]string{}));return true}
-			record:=ContractCall{MetricID:id,Package:unit.scope,Call:reference,Helper:Reference{helper.path,files.Position(helper.function.Pos()).Line,"indicator_constructor_definition"},Arguments:map[string]string{},ResultFields:map[string]string{},Resolution:"SYMBOLIC_SOURCE_CONTRACT_NOT_RUNTIME_PROOF"}
+			record:=ContractCall{MetricID:id,Package:unit.scope,Call:reference,Helper:Reference{helper.path,files.Position(helper.function.Pos()).Line,"indicator_constructor_definition"},HelperSignature:helperSignature(helper.function),Arguments:map[string]string{},ResultFields:map[string]string{},Resolution:"SYMBOLIC_SOURCE_CONTRACT_NOT_RUNTIME_PROOF"}
 			for i,name:=range parameterNames {record.Arguments[name]=render(call.Args[i])}
 			ast.Inspect(helper.function.Body,func(node ast.Node)bool{
 				literal,ok:=node.(*ast.CompositeLit);if !ok{return true}
