@@ -38,6 +38,8 @@ jobs:
           cp "$GITHUB_WORKSPACE/game/examples/relay-game/main.gooo" "$RUNNER_TEMP/relay-evidence/main.gooo"
           printf '%s\n' 'Compiler: ab91e6ec8ae7d587acbfc3d041f6edacefc02f05' 'Scope: contract check and graph only; runtime forwarding and game semantics unverified.' > "$RUNNER_TEMP/relay-evidence/scope.txt"
           sha256sum "$RUNNER_TEMP/relay-evidence/main.gooo" > "$RUNNER_TEMP/relay-evidence/source.sha256"
+      - name: Observe runtime forwarding, replay and rejected inputs
+        run: node game/scripts/relay-runtime-check.mjs "$RUNNER_TEMP/gooo" "$GITHUB_WORKSPACE/game/examples/relay-game/main.gooo" "$RUNNER_TEMP/relay-evidence"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
