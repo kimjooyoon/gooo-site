@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relay Lab | Gooo experiments</title>
+<style>
+:root{--ink:#163640;--muted:#55717a;--paper:#f5f2e9;--blue:#007d96;--gold:#edae49;--line:#c5d2d0}*{box-sizing:border-box}body{margin:0;color:var(--ink);background:radial-gradient(ellipse at 10% 0,#d7e9e5,transparent 55%),var(--paper);font:16px/1.6 Georgia,serif}header,main,footer{max-width:1180px;margin:auto;padding:24px}header{display:flex;justify-content:space-between;border-bottom:1px solid var(--line)}a{color:var(--blue)}h1{font-size:clamp(44px,7vw,78px);line-height:1;margin:20px 0}h2{font-size:25px;margin:0 0 14px}.eyebrow,button,label,.stat,pre,textarea,select{font-family:ui-monospace,Consolas,monospace}.eyebrow{text-transform:uppercase;letter-spacing:.16em;font-size:12px;color:var(--blue)}.intro{max-width:700px}.layout{display:grid;grid-template-columns:minmax(300px,1.1fr) minmax(300px,1fr);gap:28px;margin-top:32px}.panel{border:1px solid var(--line);padding:22px;background:#ffffffa8;border-radius:5px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:20px 0}.stat{padding:12px;background:#e7efed;font-size:12px}.stat strong{display:block;font-size:28px}#board{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.tile{aspect-ratio:1;border:1px solid #c5d2d0;background:repeating-linear-gradient(135deg,#e5ecea 0 5px,#eaf0ee 5px 10px);font-size:23px;color:var(--muted);border-radius:4px}.tile.safe{background:#fff}.tile.wall{background:#233e47;color:white}.tile.goal{outline:2px solid var(--gold)}.tile.player{background:var(--blue);color:#fff;box-shadow:0 4px 0 #005768}.controls{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}button,select{padding:10px 13px;border:1px solid var(--ink);border-radius:3px;background:#fff;color:var(--ink);cursor:pointer}button:hover{background:#e0eeeb}button:focus-visible,textarea:focus-visible{outline:3px solid var(--gold);outline-offset:3px}.primary{background:var(--ink);color:white}.primary:hover{background:var(--blue)}button:disabled{opacity:.5;cursor:not-allowed}textarea{width:100%;min-height:100px;padding:12px;border:1px solid var(--line);background:#fbfcfa;color:var(--ink);resize:vertical}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;background:#102e37;color:#d0f1ec;padding:16px;border-radius:3px;max-height:320px;overflow:auto}#status{min-height:54px;padding:12px;border-left:4px solid var(--blue);background:#e4eeeb}small,.muted{color:var(--muted)}.log{max-height:220px;overflow:auto;font:12px/1.7 ui-monospace,Consolas,monospace;padding-left:22px}.notice{border-left:4px solid var(--gold);padding:12px 16px;background:#fff8e9}details{margin-top:24px}summary{cursor:pointer;font-weight:bold}footer{font-size:13px} @media(max-width:760px){.layout{grid-template-columns:1fr}header,main,footer{padding:18px}.panel{padding:16px}}@media(prefers-reduced-motion:no-preference){.panel{animation:appear .45s ease-out}@keyframes appear{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}}
+</style>
+</head>
+<body>
+<header><a href="index.html">Gooo / Experiments</a><span class="eyebrow">01 · Relay Lab</span></header>
+<main id="main">
+<div class="eyebrow">Observe. Decide. Leave evidence.</div><h1>A little game.<br>A visible decision.</h1>
+<p class="intro">Reach the gold relay with 24 energy. Observe an adjacent tile before moving. People and agents submit the same small commands; unsupported claims do not become successful moves.</p>
+<div class="notice"><strong>Experimental dogfood harness.</strong> Gameplay runs in JavaScript, not Gooo. The candidate Gooo contract forwards typed turn requests; compiler evidence is separate and game semantics are not yet Gooo-verified.</div>
+<div class="layout">
+<section class="panel" aria-label="Game board"><h2>Find the relay</h2><div class="stats"><div class="stat">ENERGY<strong id="energy">24</strong></div><div class="stat">ACCEPTED<strong id="accepted">0</strong></div><div class="stat">REJECTED<strong id="rejected">0</strong></div></div>
+<div id="board" aria-label="Five by five board"></div><p class="muted">Click an adjacent tile to observe or move. ? unknown · # blocked · @ you · R relay. Rejected requests use no energy.</p>
+<div class="controls"><button id="step" class="primary">Agent: one step</button><button id="auto">Run agent</button><button id="reset">New run</button></div>
+<p id="status" role="status" aria-live="polite">Ready.</p><h2>Decision ledger</h2><ol class="log" id="ledger"></ol><button id="export">Download run evidence</button>
+</section>
+<section class="panel"><h2>Bring an AI, or be the AI</h2><p>No paid API, account or server is used here. The built-in agent is a deterministic planner, <strong>not an LLM</strong>. For an external AI, copy this observation and paste its JSON command below. Any external service cost is outside this page.</p>
+<button id="copy">Copy agent prompt</button><pre id="observation"></pre><label for="command">Next request</label><textarea id="command" spellcheck="false" aria-describedby="command-help"></textarea><small id="command-help">Exact fields: run_id, turn, action, direction. Actions: observe / move. Directions: N / E / S / W. Old turns and extra fields are rejected.</small><div class="controls"><button id="submit" class="primary">Submit request</button></div>
+<h2>What did the language do?</h2><p>The contract below declares the request shape and a record-forward activity. A separate, manually triggered CI can check it and export its graph with a pinned Gooo compiler. That does not validate this game's JavaScript transition rules.</p><pre id="contract">package relaygame
+namespace relaygame
+
+entity TurnRequest id "gooo://relay-game/request" fields {
+    field RunID id "gooo://relay-game/request/run-id" type string required one
+    field Turn id "gooo://relay-game/request/turn" type string required one
+    field Action id "gooo://relay-game/request/action" type string required one
+    field Direction id "gooo://relay-game/request/direction" type string required one
+}
+activity ForwardTurn(TurnRequest) -> TurnRequest computes "record.forward:v1"</pre>
+<p class="notice">Gooo contract execution: <strong>UNKNOWN</strong><br>Gooo game semantics: <strong>UNIMPLEMENTED</strong><br>External user utility: <strong>UNASSESSED</strong></p>
+</section></div>
+<details><summary>Evidence boundaries and next experiments</summary><p>Export includes the fixed fixture, requests, before/after state, accepted/rejected counts and a local replay recipe. It is user-controlled browser output, not a signed receipt or proof of correctness. No success percentage is interpreted as language completeness.</p><p>Next: execute ForwardTurn using the released runtime, compare its emitted fields to the submitted request, then move a bounded game transition into a Gooo-owned contract. Keep observation, gameplay success and permission to apply changes separate.</p></details>
+</main><footer>Client-only experiment · No network calls made by gameplay · <a href="evidence.html">Read the evidence boundaries</a></footer>
+<script>
+'use strict';
+const $=id=>document.getElementById(id), walls=new Set([7,11,13,17]), dirs={N:[0,-1],E:[1,0],S:[0,1],W:[-1,0]};
+let state,events,timer=null,lastMessage='';
+function snapshot(){return {position:state.position,energy:state.energy,turn:state.turn,known:[...state.known],won:state.won};}
+function neighbor(position,direction){const [dx,dy]=dirs[direction],x=position%5+dx,y=Math.floor(position/5)+dy;return x<0||x>4||y<0||y>4?-1:y*5+x;}
+function stop(){if(timer!==null)clearInterval(timer);timer=null;$('auto').textContent='Run agent';}
+function reset(){stop();state={run_id:crypto.randomUUID(),position:0,energy:24,turn:0,known:Array(25).fill('unknown'),won:false};state.known[0]='safe';events=[];lastMessage='Observe a neighboring tile, then move. The relay is at row 5, column 5.';render();}
+function request(action,direction){return {run_id:state.run_id,turn:state.turn,action,direction};}
+function apply(command,actor){const before=snapshot();let reason='ACCEPTED';let target=-1;
+if(!command||typeof command!=='object'||Array.isArray(command)||Object.keys(command).sort().join(',')!=='action,direction,run_id,turn')reason='REQUEST_SHAPE_INVALID';
+else if(command.run_id!==state.run_id||command.turn!==state.turn||!Number.isInteger(command.turn))reason='STALE_REQUEST';
+else if(!['observe','move'].includes(command.action)||!Object.hasOwn(dirs,command.direction))reason='OPERATION_UNKNOWN';
+else if(state.won||state.energy===0)reason='RUN_FINISHED';
+else {target=neighbor(state.position,command.direction);if(target===-1)reason='OUTSIDE_BOARD';else if(command.action==='observe'&&state.known[target]!=='unknown')reason='ALREADY_OBSERVED';else if(command.action==='move'&&state.known[target]!=='safe')reason=state.known[target]==='wall'?'BLOCKED_TILE':'OBSERVATION_MISSING';}
+if(reason==='ACCEPTED'){if(command.action==='observe')state.known[target]=walls.has(target)?'wall':'safe';else state.position=target;state.energy--;state.turn++;state.won=state.position===24;}
+events.push({index:events.length+1,actor,request:command,decision:reason==='ACCEPTED'?'ACCEPTED':'REJECTED',reason,before,after:snapshot()});
+lastMessage=state.won?'Relay reached. Gameplay complete; Gooo semantic verification is still unknown.':state.energy===0?'Energy exhausted. Start another run.':reason==='ACCEPTED'?command.action+' '+command.direction+' accepted.':reason+' — no state change.';
+if(state.won||state.energy===0)stop();render();}
+function plan(){const queue=[state.position],seen=new Set(queue),previous=new Map();while(queue.length){const p=queue.shift();if(p===24)break;for(const direction of ['E','S','W','N']){const n=neighbor(p,direction);if(n<0||seen.has(n)||state.known[n]==='wall')continue;seen.add(n);previous.set(n,{p,direction});queue.push(n);}}
+if(!seen.has(24))return null;let n=24;while(previous.has(n)&&previous.get(n).p!==state.position)n=previous.get(n).p;const edge=previous.get(n);return edge?request(state.known[n]==='unknown'?'observe':'move',edge.direction):null;}
+function agentStep(){if(state.won||state.energy===0)return;const next=plan();if(!next){stop();lastMessage='No route under current observations.';render();return;}apply(next,'deterministic-planner');}
+function render(){const board=$('board');board.replaceChildren();state.known.forEach((known,i)=>{const b=document.createElement('button');b.className='tile '+known+(i===24?' goal':'')+(i===state.position?' player':'');b.textContent=i===state.position?'@':known==='wall'?'#':i===24?'R':known==='unknown'?'?':'·';b.setAttribute('aria-label',`row ${Math.floor(i/5)+1}, column ${i%5+1}, ${known}${i===state.position?', current position':''}`);b.onclick=()=>{stop();const direction=Object.keys(dirs).find(d=>neighbor(state.position,d)===i);if(!direction){lastMessage='Choose an adjacent tile.';render();return;}apply(request(known==='unknown'?'observe':'move',direction),'human');};board.append(b);});
+$('energy').textContent=state.energy;$('accepted').textContent=events.filter(e=>e.decision==='ACCEPTED').length;$('rejected').textContent=events.filter(e=>e.decision==='REJECTED').length;$('status').textContent=lastMessage;
+$('observation').textContent=JSON.stringify({run_id:state.run_id,...snapshot(),goal:24,columns:5,allowed_actions:['observe','move'],directions:['N','E','S','W'],rule:'Observe unknown adjacent tiles before moving; each accepted request costs one energy.'},null,2);
+$('command').value=JSON.stringify(plan()??request('observe','E'),null,2);$('ledger').replaceChildren();for(const e of events.slice(-40)){const li=document.createElement('li');li.textContent=`#${e.index} ${e.actor}: ${e.reason} | energy ${e.before.energy} → ${e.after.energy}`;$('ledger').append(li);} $('step').disabled=state.won||state.energy===0;$('auto').disabled=state.won||state.energy===0;}
+$('step').onclick=()=>{stop();agentStep();};$('auto').onclick=()=>{if(timer!==null){stop();return;}$('auto').textContent='Pause agent';timer=setInterval(agentStep,450);};$('reset').onclick=reset;
+$('submit').onclick=()=>{stop();let command;try{command=JSON.parse($('command').value);}catch{apply(null,'external-input');return;}apply(command,'external-input');};
+$('copy').onclick=async()=>{const prompt='Play Relay Lab. Return only one JSON object with run_id, turn (integer), action and direction. Use only this observed state, not hidden tiles. Reach goal with minimal accepted actions.\n'+$('observation').textContent;try{await navigator.clipboard.writeText(prompt);lastMessage='Prompt copied. No AI request was sent by this page.';}catch{lastMessage='Clipboard unavailable. Select the observation text manually.';} $('status').textContent=lastMessage;};
+$('export').onclick=()=>{const data={schema:'gooo-relay/browser-run/v1',fixture:{id:'relay-5x5-v1',walls:[...walls],start:0,goal:24,energy:24},run_id:state.run_id,contract:$('contract').textContent,events,final:snapshot(),gooo_execution:'UNKNOWN',game_semantics:'JAVASCRIPT_ONLY',authority:'USER_CONTROLLED_UNVERIFIED_EXPORT',replay_recipe:'Start from fixture; apply each request in order under relay.html rules; compare every before/after. No replay has been performed by exporting.'};const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='relay-run.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+reset();
+</script>
+</body></html>

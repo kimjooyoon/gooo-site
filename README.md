@@ -33,3 +33,11 @@ The workflow cancels superseded checks for the same branch or PR. Production pub
 Record execution time with its workflow run and commit. Keep queue time, build/test time and publication time separate. A cache hit is reuse of inputs, not proof of semantic correctness. A lower duration from different source or runner conditions is an observation, not an established improvement.
 
 Static structure checks do not establish browser rendering quality, accessibility completeness or successful loading of the optional remote Astryx modules. Those remain separate verification tasks.
+
+## Interactive dogfood candidate
+
+[Relay Lab](https://kimjooyoon.github.io/gooo-site/relay.html) is a client-only
+exploration game with human, deterministic-planner and manual external-AI
+inputs. Its candidate Gooo request contract has a separate, manually triggered
+CI observation. Browser gameplay is currently JavaScript-only, not Gooo runtime
+execution or evidence of completed language adoption.
