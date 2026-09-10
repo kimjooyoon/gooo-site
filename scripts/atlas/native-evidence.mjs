@@ -11,9 +11,14 @@ export function bindNativeEvidence(atlas,evidence){
   if(!activityCandidates.length)activity.reason='NO_EXACT_LEXICAL_GOOO_ACTIVITY_BINDING_IN_SOURCE_CATALOG';
   else if(activityCandidates.length>1)activity.reason='MULTIPLE_LEXICAL_ACTIVITIES_MATCH_SOURCE_BINDING';
   const metricIDs=concept?.metric_bindings??[];
-  const contracts=(atlas.source_contracts?.calls??[]).filter(contract=>metricIDs.includes(contract.metric_id));
+  const releaseContracts=atlas.release_metric_contracts?.contracts??[];
+  const contracts=releaseContracts.filter(contract=>metricIDs.includes(contract.metric_id));
+  const contractIDs=contracts.map(contract=>contract.metric_id);
+  const duplicateMetricIDs=[...new Set(contractIDs.filter((id,index)=>contractIDs.indexOf(id)!==index))].sort();
   const missingMetricIDs=metricIDs.filter(id=>!contracts.some(contract=>contract.metric_id===id));
-  const contract=metricIDs.length>0&&missingMetricIDs.length===0?{state:'SOURCE_BOUND',stage:'SOURCE_CONTRACT_BINDING',step:'EXACT_RELEASE_METRIC_CONTRACTS',metric_count:metricIDs.length,source_contract_count:contracts.length}:{...unknownBinding('SOURCE_CONTRACT_BINDING','EXACT_RELEASE_METRIC_CONTRACTS','NATIVE_RELEASE_METRIC_CONTRACT_BINDING_INCOMPLETE','EXPORT_OR_BIND_EACH_RELEASE_METRIC_CONTRACT'),metric_count:metricIDs.length,source_contract_count:contracts.length,missing_metric_ids:missingMetricIDs};
+  const unexpectedMetricIDs=contractIDs.filter(id=>!metricIDs.includes(id));
+  const classCounts=Object.fromEntries(['OUTCOME','DRIVER','GUARDRAIL'].map(className=>[className,contracts.filter(contract=>contract.class===className).length]));
+  const contract=metricIDs.length>0&&contracts.length===metricIDs.length&&missingMetricIDs.length===0&&unexpectedMetricIDs.length===0&&duplicateMetricIDs.length===0?{state:'SOURCE_BOUND',stage:'SOURCE_CONTRACT_BINDING',step:'EXACT_RELEASE_METRIC_FORMULA_BINDINGS',binding_scope:'SOURCE_FORMULA_ONLY_NOT_RUNTIME_EVIDENCE',metric_count:metricIDs.length,source_contract_count:contracts.length,metric_ids:metricIDs,class_counts:classCounts,unit_state:'UNDECLARED_IN_SOURCE',runtime_evidence_state:'UNKNOWN',native_ingestion_state:'UNKNOWN'}:{...unknownBinding('SOURCE_CONTRACT_BINDING','EXACT_RELEASE_METRIC_FORMULA_BINDINGS','NATIVE_RELEASE_METRIC_FORMULA_BINDING_INCOMPLETE','EXPORT_OR_BIND_EACH_RELEASE_METRIC_FORMULA'),metric_count:metricIDs.length,source_contract_count:contracts.length,metric_ids:metricIDs,missing_metric_ids:missingMetricIDs,unexpected_metric_ids:unexpectedMetricIDs,duplicate_metric_ids:duplicateMetricIDs,class_counts:classCounts};
   return {source_head_match:sourceHeadMatch,meta_operation:operation,activity,contract};
 }
 
