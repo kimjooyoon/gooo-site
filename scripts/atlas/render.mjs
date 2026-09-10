@@ -6,6 +6,7 @@ import {annotateFields,observedFieldVocabulary} from './source-field-guide.mjs';
 import {nativeEvidence,bindNativeEvidence} from './native-evidence.mjs';
 import {validateSourceReferences} from './source-reference-validation.mjs';
 const [input,template,output,sourceRoot]=process.argv.slice(2);
+if(!sourceRoot)throw Error('sourceRoot is required for source-backed rendering');
 function metricTraceability(metric,translation){
   const sourceBacked=translation.source_backed;
   if(sourceBacked)return {identifier:metric.id,identifier_kind:sourceBacked.identifier_kind,original_label:metric.id,rendered_label:translation.ko,untranslated_tokens:translation.untranslated_tokens,source:metric.references??[],callsites:(metric.source_contracts??[]).map(contract=>({metric_id:contract.metric_id,package_scope:contract.package_scope,path:contract.call.path,line:contract.call.line,kind:contract.call.kind,helper:contract.helper})),classification:sourceBacked.classification,meaning_status:sourceBacked.semantic_state,explanation:sourceBacked.explanation,source_evidence:sourceBacked.source_evidence,unknown:sourceBacked.unknown,failure_stage:sourceBacked.unknown?.stage??null,failure_reason:sourceBacked.unknown?.reason??null,next_operation:sourceBacked.unknown?.next_operation??null};
@@ -49,7 +50,7 @@ const traceabilityCounts=countTraceabilityClasses(traceability);
 assertTraceabilityPartition();
 if(traceability.length!==untranslatedMetrics.length||Object.values(traceabilityCounts).reduce((sum,count)=>sum+count,0)!==traceability.length)throw Error('Untranslated metric traceability population mismatch');
 const sourceReferenceValidation=await validateSourceReferences(traceability,sourceRoot,atlas.source_sha);
-if(sourceRoot&&sourceReferenceValidation.state!=='SOURCE_HEAD_VALIDATED')throw Error('Pinned source reference validation failed: '+JSON.stringify(sourceReferenceValidation));
+if(sourceReferenceValidation.state!=='SOURCE_HEAD_VALIDATED')throw Error('Pinned source reference validation failed: '+JSON.stringify(sourceReferenceValidation));
 atlas.metric_label_traceability=traceability;
 atlas.metric_label_traceability_counts=traceabilityCounts;
 const translationCohort={schema:'gooo/source-metric-atlas-translation-cohort/v1',total:untranslatedCohortIds.length,ids:untranslatedCohortIds,source_backed_count:sourceReferenceValidation.validated_records,source_reference_state:sourceReferenceValidation.state,source_reference_head:sourceReferenceValidation.source_head_sha,source_reference_validated_references:sourceReferenceValidation.validated_references,semantic_unknown_count:traceability.filter(record=>record.meaning_status?.endsWith('_UNKNOWN')).length,identifier_kind_counts:Object.fromEntries([...new Set(traceability.map(record=>record.identifier_kind))].sort().map(kind=>[kind,traceability.filter(record=>record.identifier_kind===kind).length])),classification_counts:traceabilityCounts,scope:'AUDIT_COHORT_NOT_COMPLETENESS_DENOMINATOR'};
