@@ -91,7 +91,7 @@ jobs:
           receipt=atlas-output/metric-map.html.receipt.json
           test "$(jq '.metric_translation_cohort.total' "$receipt")" -eq 47
           test "$(jq '.metric_translation_cohort.source_backed_count' "$receipt")" -eq 47
-          test "$(jq '.metric_translation_cohort.scope' "$receipt")" = AUDIT_COHORT_NOT_COMPLETENESS_DENOMINATOR
+          test "$(jq -r '.metric_translation_cohort.scope' "$receipt")" = AUDIT_COHORT_NOT_COMPLETENESS_DENOMINATOR
           test "$(jq '.metric_labels_with_untranslated_tokens' "$receipt")" -eq 47
           node scripts/atlas/translation-cohort-cases.mjs "$receipt" | tee "$RUNNER_TEMP/translation-cohort-cases.json"
       - name: Verify partial source contracts and preserved cohort
