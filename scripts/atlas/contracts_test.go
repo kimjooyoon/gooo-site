@@ -119,123 +119,6 @@ type Indicator struct {
 	Value string
 }
 
-func TestCollectReleaseMetricContractsPreservesSupportedSourceShapes(t *testing.T) {
-	writeReleaseMetricFixture(t, releaseMetricFixtureFiles())
-	inventory, err := collectReleaseMetricContracts(releaseMetricFixtureSources(), "fixture-source-sha")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if inventory.MetricCount != 3 || inventory.OwnerCount != 3 || len(inventory.Contracts) != 3 || len(inventory.Unknowns) != 0 || inventory.CompleteFormulaCount != 3 {
-		t.Fatalf("normal release fixture = metric %d owner %d contracts %d complete %d unknown %d", inventory.MetricCount, inventory.OwnerCount, len(inventory.Contracts), inventory.CompleteFormulaCount, len(inventory.Unknowns))
-	}
-	var driver ReleaseMetricContract
-	for _, contract := range inventory.Contracts {
-		if contract.Class == "DRIVER" {
-			driver = contract
-		}
-	}
-	if driver.Formula.Actual.Expression != "values[index]" || driver.Formula.Actual.ResolvedExpression != "s.First" || driver.Formula.Expected.ResolvedExpression != "1" || driver.HelperResultFields["Value"] != "value" || driver.HelperResultFields["Target"] != "target" {
-		t.Fatalf("source-array element binding was not preserved: %+v", driver)
-	}
-}
-
-func TestCollectReleaseMetricContractsLowersUnsupportedShapes(t *testing.T) {
-	tests := []struct {
-		name string
-		mutate func(map[string]string)
-		wantMetric string
-		wantUnknown string
-	}{
-		{
-			name: "short values and targets arrays",
-			mutate: func(files map[string]string) {
-				files["internal/meta/languagereadiness/toolchainrelease/metrics.go"] = strings.Replace(files["internal/meta/languagereadiness/toolchainrelease/metrics.go"], "var driverMetricIDs = []string{\"gooo.metric.fixture.driver\"}", "var driverMetricIDs = []string{\"gooo.metric.fixture.driver\", \"gooo.metric.fixture.driver.two\"}", 1)
-				files["internal/meta/languagereadiness/toolchainrelease/indicator_drivers.go"] = strings.Replace(files["internal/meta/languagereadiness/toolchainrelease/indicator_drivers.go"], "values := []int{s.First}", "values := []int{s.First}", 1)
-			},
-			wantMetric: "3",
-			wantUnknown: "PROOF_BINDING",
-		},
-		{
-			name: "duplicate metric owner",
-			mutate: func(files map[string]string) {
-				files["internal/meta/languagereadiness/toolchainrelease/metrics_guardrails.go"] = `package toolchainrelease
-
-var guardrailMetricIDs = []string{"gooo.metric.fixture.outcome"}
-`
-			},
-			wantMetric: "2",
-			wantUnknown: "METRIC_ID_REGISTRY",
-		},
-		{
-			name: "helper value target mapping",
-			mutate: func(files map[string]string) {
-				files["internal/meta/languagereadiness/toolchainrelease/indicator_helper.go"] = strings.Replace(files["internal/meta/languagereadiness/toolchainrelease/indicator_helper.go"], "Value: value, Target: target", "Value: target, Target: value", 1)
-			},
-			wantMetric: "0",
-			wantUnknown: "HELPER_BINDING",
-		},
-		{
-			name: "cyclic scalar assignment",
-			mutate: func(files map[string]string) {
-				driver := files["internal/meta/languagereadiness/toolchainrelease/indicator_drivers.go"]
-				driver = strings.Replace(driver, "values := []int{s.First}", "a := b\n\tb := a\n\tvalues := []int{a}", 1)
-				files["internal/meta/languagereadiness/toolchainrelease/indicator_drivers.go"] = driver
-			},
-			wantMetric: "2",
-			wantUnknown: "FORMULA_BINDING",
-		},
-		{
-			name: "multiple control flow scalar assignment",
-			mutate: func(files map[string]string) {
-				outcomes := files["internal/meta/languagereadiness/toolchainrelease/indicator_outcomes.go"]
-				outcomes = strings.Replace(outcomes, "summary.ReadinessBPS", "proofBPS", 1)
-				files["internal/meta/languagereadiness/toolchainrelease/indicator_outcomes.go"] = outcomes
-			},
-			wantMetric: "3",
-			wantUnknown: "",
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			files := releaseMetricFixtureFiles()
-			test.mutate(files)
-			writeReleaseMetricFixture(t, files)
-			inventory, err := collectReleaseMetricContracts(releaseMetricFixtureSources(), "fixture-source-sha")
-			if err != nil {
-				t.Fatal(err)
-			}
-			if fmt.Sprint(len(inventory.Contracts)) != test.wantMetric {
-				t.Fatalf("contracts = %d, want %s; unknowns = %+v", len(inventory.Contracts), test.wantMetric, inventory.Unknowns)
-			}
-			if test.wantUnknown != "" {
-				found := false
-				for _, unknown := range inventory.Unknowns {
-					if unknown.Stage == test.wantUnknown || unknown.Step == test.wantUnknown {
-						found = true
-					}
-				}
-				if !found {
-					t.Fatalf("unknown stage/step %s not found: %+v", test.wantUnknown, inventory.Unknowns)
-				}
-			}
-			if test.name == "multiple control flow scalar assignment" {
-				found := false
-				for _, contract := range inventory.Contracts {
-					if contract.Class == "OUTCOME" {
-						found = true
-						if contract.FormulaComplete || contract.Formula.Actual.Resolution != "CONTROL_FLOW_DEPENDENT_UNKNOWN" || len(contract.Formula.Actual.Alternatives) != 2 {
-							t.Fatalf("control-flow formula was promoted: %+v", contract)
-						}
-					}
-				}
-				if !found {
-					t.Fatal("control-flow outcome owner missing")
-				}
-			}
-		})
-	}
-}
-
 func ambiguous(id string) Indicator {
 	return Indicator{MetricID: id}
 }
@@ -319,5 +202,119 @@ func use(name string) []Indicator {
 	}
 	if bindingPartial.Unknown.UnknownClass != "DIRECT_MISSING" || len(bindingPartial.Unknown.BlockedBy) != 0 {
 		t.Fatalf("binding unknown frontier = %+v", bindingPartial.Unknown)
+	}
+}
+
+func TestCollectReleaseMetricContractsPreservesSupportedSourceShapes(t *testing.T) {
+	writeReleaseMetricFixture(t, releaseMetricFixtureFiles())
+	inventory, err := collectReleaseMetricContracts(releaseMetricFixtureSources(), "fixture-source-sha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inventory.MetricCount != 3 || inventory.OwnerCount != 3 || len(inventory.Contracts) != 3 || len(inventory.Unknowns) != 0 || inventory.CompleteFormulaCount != 3 {
+		t.Fatalf("normal release fixture = metric %d owner %d contracts %d complete %d unknown %d", inventory.MetricCount, inventory.OwnerCount, len(inventory.Contracts), inventory.CompleteFormulaCount, len(inventory.Unknowns))
+	}
+	var driver ReleaseMetricContract
+	for _, contract := range inventory.Contracts {
+		if contract.Class == "DRIVER" {
+			driver = contract
+		}
+	}
+	if driver.Formula.Actual.Expression != "values[index]" || driver.Formula.Actual.ResolvedExpression != "s.First" || driver.Formula.Expected.ResolvedExpression != "1" || driver.HelperResultFields["Value"] != "value" || driver.HelperResultFields["Target"] != "target" {
+		t.Fatalf("source-array element binding was not preserved: %+v", driver)
+	}
+}
+
+func TestCollectReleaseMetricContractsLowersUnsupportedShapes(t *testing.T) {
+	tests := []struct {
+		name string
+		mutate func(map[string]string)
+		wantMetric string
+		wantUnknown string
+	}{
+		{
+			name: "short values and targets arrays",
+			mutate: func(files map[string]string) {
+				files["internal/meta/languagereadiness/toolchainrelease/metrics.go"] = strings.Replace(files["internal/meta/languagereadiness/toolchainrelease/metrics.go"], "var driverMetricIDs = []string{\"gooo.metric.fixture.driver\"}", "var driverMetricIDs = []string{\"gooo.metric.fixture.driver\", \"gooo.metric.fixture.driver.two\"}", 1)
+				files["internal/meta/languagereadiness/toolchainrelease/indicator_drivers.go"] = strings.Replace(files["internal/meta/languagereadiness/toolchainrelease/indicator_drivers.go"], "values := []int{s.First}", "values := []int{s.First}", 1)
+			},
+			wantMetric: "3",
+			wantUnknown: "PROOF_BINDING",
+		},
+		{
+			name: "duplicate metric owner",
+			mutate: func(files map[string]string) {
+				files["internal/meta/languagereadiness/toolchainrelease/metrics_guardrails.go"] = "package toolchainrelease\n\nvar guardrailMetricIDs = []string{\"gooo.metric.fixture.outcome\"}\n"
+			},
+			wantMetric: "2",
+			wantUnknown: "METRIC_ID_REGISTRY",
+		},
+		{
+			name: "helper value target mapping",
+			mutate: func(files map[string]string) {
+				files["internal/meta/languagereadiness/toolchainrelease/indicator_helper.go"] = strings.Replace(files["internal/meta/languagereadiness/toolchainrelease/indicator_helper.go"], "Value: value, Target: target", "Value: target, Target: value", 1)
+			},
+			wantMetric: "0",
+			wantUnknown: "HELPER_BINDING",
+		},
+		{
+			name: "cyclic scalar assignment",
+			mutate: func(files map[string]string) {
+				driver := files["internal/meta/languagereadiness/toolchainrelease/indicator_drivers.go"]
+				driver = strings.Replace(driver, "values := []int{s.First}", "a := b\n\tb := a\n\tvalues := []int{a}", 1)
+				files["internal/meta/languagereadiness/toolchainrelease/indicator_drivers.go"] = driver
+			},
+			wantMetric: "2",
+			wantUnknown: "FORMULA_BINDING",
+		},
+		{
+			name: "multiple control flow scalar assignment",
+			mutate: func(files map[string]string) {
+				outcomes := files["internal/meta/languagereadiness/toolchainrelease/indicator_outcomes.go"]
+				outcomes = strings.Replace(outcomes, "summary.ReadinessBPS", "proofBPS", 1)
+				files["internal/meta/languagereadiness/toolchainrelease/indicator_outcomes.go"] = outcomes
+			},
+			wantMetric: "3",
+			wantUnknown: "",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			files := releaseMetricFixtureFiles()
+			test.mutate(files)
+			writeReleaseMetricFixture(t, files)
+			inventory, err := collectReleaseMetricContracts(releaseMetricFixtureSources(), "fixture-source-sha")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if fmt.Sprint(len(inventory.Contracts)) != test.wantMetric {
+				t.Fatalf("contracts = %d, want %s; unknowns = %+v", len(inventory.Contracts), test.wantMetric, inventory.Unknowns)
+			}
+			if test.wantUnknown != "" {
+				found := false
+				for _, unknown := range inventory.Unknowns {
+					if unknown.Stage == test.wantUnknown || unknown.Step == test.wantUnknown {
+						found = true
+					}
+				}
+				if !found {
+					t.Fatalf("unknown stage/step %s not found: %+v", test.wantUnknown, inventory.Unknowns)
+				}
+			}
+			if test.name == "multiple control flow scalar assignment" {
+				found := false
+				for _, contract := range inventory.Contracts {
+					if contract.Class == "OUTCOME" {
+						found = true
+						if contract.FormulaComplete || contract.Formula.Actual.Resolution != "CONTROL_FLOW_DEPENDENT_UNKNOWN" || len(contract.Formula.Actual.Alternatives) != 2 {
+							t.Fatalf("control-flow formula was promoted: %+v", contract)
+						}
+					}
+				}
+				if !found {
+					t.Fatal("control-flow outcome owner missing")
+				}
+			}
+		})
 	}
 }
