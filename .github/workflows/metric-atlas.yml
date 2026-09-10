@@ -63,7 +63,7 @@ jobs:
           test "$(jq '.metric_labels_with_untranslated_tokens' "$receipt")" -eq 47
           test "$(jq '.concepts' "$receipt")" -eq 29
           test "$(jq '[.concepts[].use_cases] | add | length' "$catalog")" -eq 57
-          node scripts/atlas/source-field-guide-cases.mjs "$receipt" | tee "$RUNNER_TEMP/source-field-guide-cases.json"
+          node scripts/atlas/source-field-guide-cases.mjs "$receipt" "$catalog" | tee "$RUNNER_TEMP/source-field-guide-cases.json"
       - name: Verify partial source contracts and preserved cohort
         shell: bash
         run: |

@@ -4,6 +4,9 @@ import {annotateFields,observedFieldVocabulary} from './source-field-guide.mjs';
 const receiptPath=process.argv[2];
 if(!receiptPath)throw Error('render receipt path is required');
 const receipt=JSON.parse(await readFile(receiptPath,'utf8'));
+const catalogPath=process.argv[3];
+if(!catalogPath)throw Error('catalog path is required');
+const catalog=JSON.parse(await readFile(catalogPath,'utf8'));
 const expectedArguments=['activity','actual','applicability','basisPoints','choice','class','comparator','consumer','evidence','exact','expected','family','id','kind','known','metric','metricID','name','observed','operation','pass','passed','producer','proof','proofChoice','reader','relation','resolution','route','satisfied','status','suffix','target','total','trilemma','unit','value'];
 const expectedResults=['Activity','Actual','Applicability','Choice','Class','Comparator','Consumer','EvidenceDigest','Expected','Family','ID','Kind','Limit','MetaOperation','MetricID','Observed','Passed','Producer','ProofChoice','Reader','Relation','Resolution','Route','Satisfied','State','Status','Target','Total','Trilemma','Unit','Value','Verdict'];
 const fail=message=>{throw Error(message)};
@@ -21,7 +24,7 @@ if(!unknownVocabulary.argument_guide_missing.includes('constructor')||!unknownVo
 const known=annotateFields({value:'value.raw.expression'},'argument')[0];
 if(known.field!=='value'||known.expression!=='value.raw.expression'||known.guide_status!=='EXPLAINED')fail('known source field expression was not preserved');
 const sourceAuthorityCallsites=new Map([[20,['gooo.metric.semantic.source-authority-promotion-eligibility-bps.v1','eligible']],[21,['gooo.metric.evidence.assurance-denominator-binding-bps.v1','baselineOK']],[22,['gooo.metric.evidence.upstream-conformance-binding-bps.v1','evidenceOK']]]);
-const sourceAuthorityContracts=(receipt.source_contracts?.calls??[]).filter(record=>record.call?.path==='internal/meta/languageassurance/sourceauthoritypromotion/indicators.go'&&sourceAuthorityCallsites.has(record.call.line));
+const sourceAuthorityContracts=(catalog.source_contracts?.calls??[]).filter(record=>record.call?.path==='internal/meta/languageassurance/sourceauthoritypromotion/indicators.go'&&sourceAuthorityCallsites.has(record.call.line));
 if(sourceAuthorityContracts.length!==3||new Set(sourceAuthorityContracts.map(record=>record.call.line)).size!==3||sourceAuthorityContracts.some(record=>{
   const expected=sourceAuthorityCallsites.get(record.call.line);
   return record.call.kind!=='indicator_constructor_call'||record.helper?.path!=='internal/meta/languageassurance/sourceauthoritypromotion/indicators.go'||record.helper?.line!==29||record.helper?.kind!=='indicator_constructor_definition'||record.metric_id!==expected[0]||record.argument_expressions?.basisPoints!=='true'||record.argument_expressions?.satisfied!==expected[1]||record.result_field_expressions?.Unit!=='unit'||record.result_field_expressions?.Value!=='value';
