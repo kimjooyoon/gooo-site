@@ -1,3 +1,5 @@
+import {validateReleaseMetricBindings,releaseBindingUnknown} from './release-metric-validator.mjs';
+
 const unknownBinding=(stage,step,reason,next_operation)=>({state:'UNKNOWN',stage,step,reason,unknown_class:'DIRECT_MISSING',next_operation,blocked_by:[]});
 
 export function bindNativeEvidence(atlas,evidence){
@@ -12,13 +14,9 @@ export function bindNativeEvidence(atlas,evidence){
   else if(activityCandidates.length>1)activity.reason='MULTIPLE_LEXICAL_ACTIVITIES_MATCH_SOURCE_BINDING';
   const metricIDs=concept?.metric_bindings??[];
   const releaseContracts=atlas.release_metric_contracts?.contracts??[];
-  const contracts=releaseContracts.filter(contract=>metricIDs.includes(contract.metric_id));
-  const contractIDs=contracts.map(contract=>contract.metric_id);
-  const duplicateMetricIDs=[...new Set(contractIDs.filter((id,index)=>contractIDs.indexOf(id)!==index))].sort();
-  const missingMetricIDs=metricIDs.filter(id=>!contracts.some(contract=>contract.metric_id===id));
-  const unexpectedMetricIDs=contractIDs.filter(id=>!metricIDs.includes(id));
-  const classCounts=Object.fromEntries(['OUTCOME','DRIVER','GUARDRAIL'].map(className=>[className,contracts.filter(contract=>contract.class===className).length]));
-  const contract=metricIDs.length>0&&contracts.length===metricIDs.length&&missingMetricIDs.length===0&&unexpectedMetricIDs.length===0&&duplicateMetricIDs.length===0?{state:'SOURCE_BOUND',stage:'SOURCE_CONTRACT_BINDING',step:'EXACT_RELEASE_METRIC_FORMULA_BINDINGS',binding_scope:'SOURCE_FORMULA_ONLY_NOT_RUNTIME_EVIDENCE',metric_count:metricIDs.length,source_contract_count:contracts.length,metric_ids:metricIDs,class_counts:classCounts,unit_state:'UNDECLARED_IN_SOURCE',runtime_evidence_state:'UNKNOWN',native_ingestion_state:'UNKNOWN'}:{...unknownBinding('SOURCE_CONTRACT_BINDING','EXACT_RELEASE_METRIC_FORMULA_BINDINGS','NATIVE_RELEASE_METRIC_FORMULA_BINDING_INCOMPLETE','EXPORT_OR_BIND_EACH_RELEASE_METRIC_FORMULA'),metric_count:metricIDs.length,source_contract_count:contracts.length,metric_ids:metricIDs,missing_metric_ids:missingMetricIDs,unexpected_metric_ids:unexpectedMetricIDs,duplicate_metric_ids:duplicateMetricIDs,class_counts:classCounts};
+  const contractValidation=metricIDs.length?validateReleaseMetricBindings(atlas,metricIDs,evidence.source_head_sha):releaseBindingUnknown('NATIVE_RELEASE_METRIC_ID_COHORT_MISSING','BIND_RELEASE_METRIC_COHORT_FROM_SOURCE_CONCEPT');
+  const classCounts=Object.fromEntries(['OUTCOME','DRIVER','GUARDRAIL'].map(className=>[className,releaseContracts.filter(contract=>contract.class===className).length]));
+  const contract={...contractValidation,metric_count:metricIDs.length,owner_count:releaseContracts.length,source_contract_count:releaseContracts.length,complete_formula_count:releaseContracts.filter(contract=>contract.formula_complete===true).length,metric_ids:metricIDs,class_counts:classCounts};
   return {source_head_match:sourceHeadMatch,meta_operation:operation,activity,contract};
 }
 

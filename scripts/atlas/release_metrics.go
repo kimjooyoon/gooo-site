@@ -27,6 +27,14 @@ type ReleaseFormulaField struct {
 	ResolvedExpression string    `json:"resolved_expression,omitempty"`
 	Resolution        string    `json:"resolution"`
 	Reference          Reference `json:"reference"`
+	ResolvedReference  Reference `json:"resolved_reference,omitempty"`
+	Alternatives       []ReleaseFormulaAlternative `json:"alternatives,omitempty"`
+}
+
+type ReleaseFormulaAlternative struct {
+	Expression     string    `json:"expression"`
+	GuardExpression string   `json:"guard_expression,omitempty"`
+	Reference      Reference `json:"reference"`
 }
 
 type ReleaseMetricContract struct {
@@ -37,9 +45,11 @@ type ReleaseMetricContract struct {
 	Constructor     string               `json:"constructor"`
 	Helper          Reference            `json:"helper"`
 	HelperSignature string               `json:"helper_signature"`
+	HelperResultFields map[string]string `json:"helper_result_fields"`
 	Call            Reference            `json:"call"`
 	MetricIDSource  Reference            `json:"metric_id_source"`
 	Formula         ReleaseMetricFormula `json:"formula"`
+	FormulaComplete bool                 `json:"formula_complete"`
 	Resolution      string               `json:"resolution"`
 }
 
@@ -68,6 +78,8 @@ type ReleaseMetricContractInventory struct {
 	SourceFiles []string                `json:"source_files"`
 	MetricIDs   []string                `json:"metric_ids"`
 	MetricCount int                     `json:"metric_count"`
+	OwnerCount int                       `json:"owner_count"`
+	CompleteFormulaCount int             `json:"complete_formula_count"`
 	ClassCounts map[string]int          `json:"class_counts"`
 	Contracts   []ReleaseMetricContract `json:"contracts"`
 	Unknowns    []ReleaseMetricUnknown  `json:"unknowns"`
@@ -95,6 +107,7 @@ type releaseRange struct {
 type releaseScalar struct {
 	expression ast.Expr
 	reference Reference
+	guardExpression string
 }
 
 func collectReleaseMetricContracts(sources []Source, sourceSHA string) (ReleaseMetricContractInventory, error) {
@@ -253,6 +266,12 @@ func collectReleaseMetricContracts(sources []Source, sourceSHA string) (ReleaseM
 			result.Unknowns = append(result.Unknowns, releaseMetricUnknown("SOURCE_FORMULA_BINDING", "CHECK_RELEASE_METRIC_OWNER_UNIQUENESS", "MULTIPLE_RELEASE_INDICATOR_OWNERS:"+metricID, "DEPENDENCY_BLOCKED", "SELECT_ONE_DETERMINISTIC_RELEASE_INDICATOR_OWNER", []string{"metric-id:" + metricID}, Reference{Kind: "release_metric_owner_collision"}))
 		}
 	}
+	result.OwnerCount = len(result.Contracts)
+	for _, contract := range result.Contracts {
+		if contract.FormulaComplete {
+			result.CompleteFormulaCount++
+		}
+	}
 	sort.SliceStable(result.Unknowns, func(i, j int) bool {
 		if result.Unknowns[i].Call.Path != result.Unknowns[j].Call.Path {
 			return result.Unknowns[i].Call.Path < result.Unknowns[j].Call.Path
@@ -260,6 +279,23 @@ func collectReleaseMetricContracts(sources []Source, sourceSHA string) (ReleaseM
 		return result.Unknowns[i].Call.Line < result.Unknowns[j].Call.Line
 	})
 	return result, nil
+}
+
+func releaseFormulaComplete(formula ReleaseMetricFormula) bool {
+	fields := []ReleaseFormulaField{formula.Actual, formula.Expected, formula.Comparator, formula.Unit, formula.Proof}
+	for _, field := range fields {
+		if field.Expression == "" || strings.HasSuffix(field.Resolution, "_UNKNOWN") || field.Resolution == "CONTROL_FLOW_DEPENDENT_UNKNOWN" {
+			return false
+		}
+	}
+	return true
+}
+
+func releaseFormulaFieldUnresolved(field ReleaseFormulaField) bool {
+	if field.Resolution == "CONTROL_FLOW_DEPENDENT_UNKNOWN" {
+		return false
+	}
+	return strings.HasSuffix(field.Resolution, "_UNKNOWN")
 }
 
 func releaseMetricSourcePath(path string) bool {
@@ -347,25 +383,53 @@ func releaseArrayFromExpression(expression ast.Expr, path string, files *token.F
 	return array, true
 }
 
-func releaseScalarsInFunction(function *ast.FuncDecl, path string, files *token.FileSet) map[string]releaseScalar {
-	scalars := map[string]releaseScalar{}
+func releaseScalarsInFunction(function *ast.FuncDecl, path string, files *token.FileSet) map[string][]releaseScalar {
+	scalars := map[string][]releaseScalar{}
 	if function.Body == nil {
 		return scalars
 	}
-	ast.Inspect(function.Body, func(node ast.Node) bool {
-		switch statement := node.(type) {
+	var addAssignment func(string, ast.Expr, Reference, string)
+	addAssignment = func(name string, expression ast.Expr, reference Reference, guard string) {
+		scalars[name] = append(scalars[name], releaseScalar{expression: expression, reference: reference, guardExpression: guard})
+	}
+	var walk func(ast.Stmt, string)
+	walk = func(statement ast.Stmt, guard string) {
+		switch statement := statement.(type) {
+		case *ast.BlockStmt:
+			for _, child := range statement.List {
+				walk(child, guard)
+			}
+		case *ast.IfStmt:
+			if statement.Init != nil {
+				walk(statement.Init, guard)
+			}
+			condition := renderReleaseNode(files, statement.Cond)
+			walk(statement.Body, releaseGuard(guard, condition))
+			if statement.Else != nil {
+				walk(statement.Else, releaseGuard(guard, "else("+condition+")"))
+			}
+		case *ast.ForStmt:
+			if statement.Init != nil {
+				walk(statement.Init, guard)
+			}
+			walk(statement.Body, releaseGuard(guard, "loop"))
+			if statement.Post != nil {
+				walk(statement.Post, guard)
+			}
+		case *ast.RangeStmt:
+			walk(statement.Body, releaseGuard(guard, "range"))
 		case *ast.AssignStmt:
 			if len(statement.Lhs) == len(statement.Rhs) {
 				for index, left := range statement.Lhs {
 					if name, ok := left.(*ast.Ident); ok {
-						scalars[name.Name] = releaseScalar{expression: statement.Rhs[index], reference: Reference{Path: path, Line: files.Position(statement.Rhs[index].Pos()).Line, Kind: "release_scalar_assignment"}}
+						addAssignment(name.Name, statement.Rhs[index], Reference{Path: path, Line: files.Position(statement.Rhs[index].Pos()).Line, Kind: "release_scalar_assignment"}, guard)
 					}
 				}
 			}
 		case *ast.DeclStmt:
 			general, ok := statement.Decl.(*ast.GenDecl)
 			if !ok || general.Tok != token.VAR {
-				return true
+				return
 			}
 			for _, specification := range general.Specs {
 				value, ok := specification.(*ast.ValueSpec)
@@ -373,13 +437,44 @@ func releaseScalarsInFunction(function *ast.FuncDecl, path string, files *token.
 					continue
 				}
 				for index, name := range value.Names {
-					scalars[name.Name] = releaseScalar{expression: value.Values[index], reference: Reference{Path: path, Line: files.Position(value.Values[index].Pos()).Line, Kind: "release_scalar_declaration"}}
+					addAssignment(name.Name, value.Values[index], Reference{Path: path, Line: files.Position(value.Values[index].Pos()).Line, Kind: "release_scalar_declaration"}, guard)
 				}
 			}
+		default:
+			ast.Inspect(statement, func(node ast.Node) bool {
+				switch nested := node.(type) {
+				case *ast.AssignStmt:
+					if len(nested.Lhs) == len(nested.Rhs) {
+						for index, left := range nested.Lhs {
+							if name, ok := left.(*ast.Ident); ok {
+								addAssignment(name.Name, nested.Rhs[index], Reference{Path: path, Line: files.Position(nested.Rhs[index].Pos()).Line, Kind: "release_scalar_assignment"}, guard)
+							}
+						}
+					}
+				case *ast.DeclStmt:
+					if general, ok := nested.Decl.(*ast.GenDecl); ok && general.Tok == token.VAR {
+						for _, specification := range general.Specs {
+							if value, ok := specification.(*ast.ValueSpec); ok && len(value.Values) == len(value.Names) {
+								for index, name := range value.Names {
+									addAssignment(name.Name, value.Values[index], Reference{Path: path, Line: files.Position(value.Values[index].Pos()).Line, Kind: "release_scalar_declaration"}, guard)
+								}
+							}
+						}
+					}
+				}
+				return true
+			})
 		}
-		return true
-	})
+	}
+	walk(function.Body, "")
 	return scalars
+}
+
+func releaseGuard(parent, child string) string {
+	if parent == "" {
+		return child
+	}
+	return parent + " && " + child
 }
 
 func releaseRangesInFunction(function *ast.FuncDecl, path string, arrays map[string]releaseArray) []releaseRange {
@@ -435,7 +530,7 @@ func releaseContractFromCall(call *ast.CallExpr, callReference Reference, functi
 	class string
 	path  string
 	decl  *ast.FuncDecl
-}, rangeContext *releaseRange, rangeIndex int, arrays map[string]releaseArray, localArrays map[string]releaseArray, localScalars map[string]releaseScalar, files *token.FileSet, metricClassByID map[string]string, metricSourceByID map[string]Reference, helperPath string, helperDecl *ast.FuncDecl) (ReleaseMetricContract, ReleaseMetricUnknown, bool) {
+}, rangeContext *releaseRange, rangeIndex int, arrays map[string]releaseArray, localArrays map[string]releaseArray, localScalars map[string][]releaseScalar, files *token.FileSet, metricClassByID map[string]string, metricSourceByID map[string]Reference, helperPath string, helperDecl *ast.FuncDecl) (ReleaseMetricContract, ReleaseMetricUnknown, bool) {
 	unknown := func(stage, reason, unknownClass, next string, blocked []string) (ReleaseMetricContract, ReleaseMetricUnknown, bool) {
 		return ReleaseMetricContract{}, releaseMetricUnknown(stage, "BIND_RELEASE_FORMULA_FIELD", reason, unknownClass, next, blocked, callReference), false
 	}
@@ -466,8 +561,15 @@ func releaseContractFromCall(call *ast.CallExpr, callReference Reference, functi
 	if actual.Expression == "" || expected.Expression == "" {
 		return unknown("FORMULA_BINDING", "RELEASE_ACTUAL_OR_EXPECTED_EXPRESSION_MISSING", "DIRECT_MISSING", "PRESERVE_RELEASE_ACTUAL_AND_EXPECTED_EXPRESSIONS", []string{})
 	}
+	if releaseFormulaFieldUnresolved(actual) || releaseFormulaFieldUnresolved(expected) {
+		return unknown("FORMULA_BINDING", "RELEASE_SOURCE_ARRAY_OR_SCALAR_RESOLUTION_UNKNOWN", "DIRECT_MISSING", "RESOLVE_RELEASE_FORMULA_SOURCE_DATAFLOW", []string{})
+	}
 	if helperDecl == nil || helperPath == "" {
 		return unknown("HELPER_BINDING", "RELEASE_INDICATOR_HELPER_MISSING", "DIRECT_MISSING", "READ_PINNED_RELEASE_INDICATOR_HELPER", []string{})
+	}
+	helperResultFields := releaseHelperResultFields(helperDecl, files)
+	if !releaseHelperMappingValid(helperDecl, helperResultFields) {
+		return unknown("HELPER_BINDING", "RELEASE_INDICATOR_HELPER_VALUE_TARGET_MAPPING_UNSUPPORTED", "DEPENDENCY_BLOCKED", "CONFIRM_INDICATOR_HELPER_VALUE_TARGET_MAPPING", []string{"source-helper:" + helperPath + ":" + strconv.Itoa(files.Position(helperDecl.Pos()).Line)})
 	}
 	helperReference := Reference{Path: helperPath, Line: files.Position(helperDecl.Pos()).Line, Kind: "release_indicator_constructor_definition"}
 	helperSignature := renderReleaseNode(files, helperDecl.Type)
@@ -487,10 +589,15 @@ func releaseContractFromCall(call *ast.CallExpr, callReference Reference, functi
 		Constructor: "indicator",
 		Helper: helperReference,
 		HelperSignature: "func indicator" + strings.TrimPrefix(helperSignature, "func"),
+		HelperResultFields: helperResultFields,
 		Call: callReference,
 		MetricIDSource: metricIDField.Reference,
 		Formula: formula,
+		FormulaComplete: releaseFormulaComplete(formula),
 		Resolution: "SOURCE_FORMULA_BOUND_NOT_RUNTIME_OR_NATIVE_EVIDENCE",
+	}
+	if !contract.FormulaComplete {
+		contract.Resolution = "SOURCE_OWNER_BOUND_FORMULA_PARTIAL_UNKNOWN_NOT_RUNTIME_EVIDENCE"
 	}
 	if previous, exists := metricSourceByID[metricID]; exists && (previous.Path != metricIDField.Reference.Path || previous.Line != metricIDField.Reference.Line) {
 		return unknown("METRIC_ID_BINDING", "RELEASE_METRIC_ID_HAS_MULTIPLE_SOURCE_ARRAY_OWNERS", "DEPENDENCY_BLOCKED", "SELECT_ONE_RELEASE_METRIC_ID_OWNER", []string{"metric-id:" + metricID})
@@ -500,12 +607,81 @@ func releaseContractFromCall(call *ast.CallExpr, callReference Reference, functi
 
 func releaseStringTerm(expression ast.Expr, arrays map[string]releaseArray, localArrays map[string]releaseArray, rangeContext *releaseRange, rangeIndex int, files *token.FileSet, kind string) (string, ReleaseFormulaField, bool) {
 	field := releaseFormulaTerm(expression, arrays, localArrays, nil, rangeContext, rangeIndex, files, kind)
-	return field.ResolvedExpression, field, field.Resolution == "LITERAL_OR_SOURCE_ARRAY_RESOLVED"
+	return field.ResolvedExpression, field, field.ResolvedExpression != "" && !strings.HasSuffix(field.Resolution, "_UNKNOWN") && field.Resolution != "CONTROL_FLOW_DEPENDENT_UNKNOWN"
 }
 
-func releaseFormulaTerm(expression ast.Expr, arrays map[string]releaseArray, localArrays map[string]releaseArray, scalars map[string]releaseScalar, rangeContext *releaseRange, rangeIndex int, files *token.FileSet, kind string) ReleaseFormulaField {
+func releaseHelperResultFields(helper *ast.FuncDecl, files *token.FileSet) map[string]string {
+	fields := map[string]string{}
+	if helper == nil || helper.Body == nil {
+		return fields
+	}
+	ast.Inspect(helper.Body, func(node ast.Node) bool {
+		literal, ok := node.(*ast.CompositeLit)
+		if !ok {
+			return true
+		}
+		typeName := ""
+		switch typ := literal.Type.(type) {
+		case *ast.Ident:
+			typeName = typ.Name
+		case *ast.SelectorExpr:
+			typeName = typ.Sel.Name
+		}
+		if typeName != "Indicator" {
+			return true
+		}
+		for _, element := range literal.Elts {
+			pair, ok := element.(*ast.KeyValueExpr)
+			if !ok {
+				continue
+			}
+			key, ok := pair.Key.(*ast.Ident)
+			if ok {
+				fields[key.Name] = renderReleaseNode(files, pair.Value)
+			}
+		}
+		return true
+	})
+	return fields
+}
+
+func releaseParameterNames(function *ast.FuncDecl) []string {
+	names := []string{}
+	if function == nil || function.Type == nil || function.Type.Params == nil {
+		return names
+	}
+	for _, field := range function.Type.Params.List {
+		for _, name := range field.Names {
+			names = append(names, name.Name)
+		}
+	}
+	return names
+}
+
+func releaseHelperMappingValid(helper *ast.FuncDecl, fields map[string]string) bool {
+	names := releaseParameterNames(helper)
+	if len(names) != 6 {
+		return false
+	}
+	expected := map[string]string{"MetricID": names[0], "Class": names[1], "ProofChoice": names[2], "Value": names[3], "Target": names[4], "Relation": names[5]}
+	for field, parameter := range expected {
+		if fields[field] != parameter {
+			return false
+		}
+	}
+	return true
+}
+
+func releaseFormulaTerm(expression ast.Expr, arrays map[string]releaseArray, localArrays map[string]releaseArray, scalars map[string][]releaseScalar, rangeContext *releaseRange, rangeIndex int, files *token.FileSet, kind string) ReleaseFormulaField {
+	return releaseFormulaTermAt(expression, arrays, localArrays, scalars, rangeContext, rangeIndex, files, kind, 0, map[string]bool{})
+}
+
+func releaseFormulaTermAt(expression ast.Expr, arrays map[string]releaseArray, localArrays map[string]releaseArray, scalars map[string][]releaseScalar, rangeContext *releaseRange, rangeIndex int, files *token.FileSet, kind string, depth int, scalarStack map[string]bool) ReleaseFormulaField {
 	if expression == nil {
 		return ReleaseFormulaField{Resolution: "SYMBOLIC_SOURCE_EXPRESSION", Reference: Reference{Kind: kind}}
+	}
+	if depth > 16 {
+		return ReleaseFormulaField{Expression: renderReleaseNode(files, expression), Resolution: "SCALAR_DEPTH_LIMIT_UNKNOWN", Reference: Reference{Path: files.Position(expression.Pos()).Filename, Line: files.Position(expression.Pos()).Line, Kind: kind}}
 	}
 	field := ReleaseFormulaField{Expression: renderReleaseNode(files, expression), Resolution: "SYMBOLIC_SOURCE_EXPRESSION", Reference: Reference{Line: files.Position(expression.Pos()).Line, Kind: kind}}
 	field.Reference.Path = files.Position(expression.Pos()).Filename
@@ -515,13 +691,28 @@ func releaseFormulaTerm(expression ast.Expr, arrays map[string]releaseArray, loc
 		return field
 	}
 	if scalar, ok := expression.(*ast.Ident); ok && scalars != nil {
-		if value, exists := scalars[scalar.Name]; exists {
-			resolved := releaseFormulaTerm(value.expression, arrays, localArrays, scalars, rangeContext, rangeIndex, files, kind)
-			field.ResolvedExpression = resolved.ResolvedExpression
-			if resolved.ResolvedExpression != "" {
-				field.Resolution = resolved.Resolution
+		if values, exists := scalars[scalar.Name]; exists {
+			if scalarStack[scalar.Name] {
+				field.Resolution = "SCALAR_CYCLE_UNKNOWN"
+				return field
 			}
-			field.Reference = value.reference
+			if len(values) != 1 {
+				field.Resolution = "CONTROL_FLOW_DEPENDENT_UNKNOWN"
+				for _, value := range values {
+					field.Alternatives = append(field.Alternatives, ReleaseFormulaAlternative{Expression: renderReleaseNode(files, value.expression), GuardExpression: value.guardExpression, Reference: value.reference})
+				}
+				return field
+			}
+			scalarStack[scalar.Name] = true
+			resolved := releaseFormulaTermAt(values[0].expression, arrays, localArrays, scalars, rangeContext, rangeIndex, files, kind, depth+1, scalarStack)
+			delete(scalarStack, scalar.Name)
+			field.ResolvedExpression = resolved.Expression
+			field.ResolvedReference = resolved.Reference
+			field.Resolution = "SOURCE_SCALAR_RESOLVED"
+			if strings.HasSuffix(resolved.Resolution, "_UNKNOWN") {
+				field.Resolution = resolved.Resolution
+				field.Alternatives = resolved.Alternatives
+			}
 			return field
 		}
 	}
@@ -535,19 +726,35 @@ func releaseFormulaTerm(expression ast.Expr, arrays map[string]releaseArray, loc
 			if found {
 				position, known := releaseIndexValue(index.Index, rangeContext, rangeIndex)
 				if known && position >= 0 && position < len(array.elements) {
-					resolved := releaseFormulaTerm(array.elements[position], arrays, localArrays, scalars, nil, -1, files, kind)
-					field.ResolvedExpression = resolved.ResolvedExpression
-					field.Resolution = "LITERAL_OR_SOURCE_ARRAY_RESOLVED"
-					field.Reference = array.references[position]
+					resolved := releaseFormulaTermAt(array.elements[position], arrays, localArrays, scalars, nil, -1, files, kind, depth+1, scalarStack)
+					field.ResolvedExpression = resolved.Expression
+					field.ResolvedReference = array.references[position]
+					field.Resolution = "SOURCE_ARRAY_ELEMENT_RESOLVED"
+					if strings.HasSuffix(resolved.Resolution, "_UNKNOWN") {
+						field.Resolution = resolved.Resolution
+						field.Alternatives = resolved.Alternatives
+					}
+				} else if !known {
+					field.Resolution = "SOURCE_ARRAY_INDEX_UNKNOWN"
+				} else {
+					field.Resolution = "SOURCE_ARRAY_INDEX_OUT_OF_RANGE_UNKNOWN"
 				}
+			} else {
+				field.Resolution = "SOURCE_ARRAY_NOT_FOUND_UNKNOWN"
 			}
 		}
 	}
 	if identifier, ok := expression.(*ast.Ident); ok && rangeContext != nil && identifier.Name == rangeContext.valueName && rangeIndex >= 0 && rangeIndex < len(rangeContext.array.elements) {
-		resolved := releaseFormulaTerm(rangeContext.array.elements[rangeIndex], arrays, localArrays, scalars, nil, -1, files, kind)
-		field.ResolvedExpression = resolved.ResolvedExpression
-		field.Resolution = "LITERAL_OR_SOURCE_ARRAY_RESOLVED"
-		field.Reference = rangeContext.array.references[rangeIndex]
+		resolved := releaseFormulaTermAt(rangeContext.array.elements[rangeIndex], arrays, localArrays, scalars, nil, -1, files, kind, depth+1, scalarStack)
+		field.ResolvedExpression = resolved.Expression
+		field.ResolvedReference = rangeContext.array.references[rangeIndex]
+		field.Resolution = "SOURCE_ARRAY_ELEMENT_RESOLVED"
+		if strings.HasSuffix(resolved.Resolution, "_UNKNOWN") {
+			field.Resolution = resolved.Resolution
+			field.Alternatives = resolved.Alternatives
+		}
+	} else if identifier, ok := expression.(*ast.Ident); ok && rangeContext != nil && identifier.Name == rangeContext.valueName {
+		field.Resolution = "SOURCE_ARRAY_INDEX_OUT_OF_RANGE_UNKNOWN"
 	}
 	return field
 }
@@ -565,7 +772,7 @@ func releaseIndexValue(expression ast.Expr, rangeContext *releaseRange, rangeInd
 	return -1, false
 }
 
-func releaseString(expression ast.Expr, arrays map[string]releaseArray, rangeContext *releaseRange, rangeIndex int, scalars map[string]releaseScalar, files *token.FileSet) (string, bool) {
+func releaseString(expression ast.Expr, arrays map[string]releaseArray, rangeContext *releaseRange, rangeIndex int, scalars map[string][]releaseScalar, files *token.FileSet) (string, bool) {
 	field := releaseFormulaTerm(expression, arrays, nil, scalars, rangeContext, rangeIndex, files, "release_string_resolution")
 	if value, ok := releaseLiteralString(expression); ok {
 		return value, true
