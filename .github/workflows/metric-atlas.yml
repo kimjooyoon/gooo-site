@@ -176,7 +176,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/atlas/source-definition-binding-cases.mjs atlas-output/metric-map.html.receipt.json atlas-output/catalog.json | tee "$RUNNER_TEMP/source-definition-binding-cases.json"
+          node scripts/atlas/source-definition-binding-cases.mjs atlas-output/metric-map.html.receipt.json atlas-output/metric-map.html | tee "$RUNNER_TEMP/source-definition-binding-cases.json"
           {
             echo
             echo '## Source definition binding checks'
