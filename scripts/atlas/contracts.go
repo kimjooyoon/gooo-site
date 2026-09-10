@@ -82,10 +82,7 @@ func collectContracts(sources []Source) (ContractInventory,error) {
 			parameters:=[]string{}
 			for _,field:=range helper.function.Type.Params.List {for _,name:=range field.Names{parameters=append(parameters,name.Name)}}
 			if len(parameters)!=len(call.Args)||len(call.Args)==0{result.UnresolvedCalls=append(result.UnresolvedCalls,reference);return true}
-			idIndex:=-1
-			for i,name:=range parameters {switch strings.ToLower(name){case "id","metricid","metric_id":idIndex=i}}
-			if idIndex<0{result.UnresolvedCalls=append(result.UnresolvedCalls,reference);return true}
-			id,resolved:=resolve(call.Args[idIndex],unit.scope,0)
+			id,resolved:=constructorMetricIdentity(helper.function,call.Args,unit.scope,resolve)
 			if !resolved||id==""{result.UnresolvedCalls=append(result.UnresolvedCalls,reference);return true}
 			record:=ContractCall{MetricID:id,Package:unit.scope,Call:reference,Helper:Reference{helper.path,files.Position(helper.function.Pos()).Line,"indicator_constructor_definition"},Arguments:map[string]string{},ResultFields:map[string]string{},Resolution:"SYMBOLIC_SOURCE_CONTRACT_NOT_RUNTIME_PROOF"}
 			for i,name:=range parameters {record.Arguments[name]=render(call.Args[i])}
