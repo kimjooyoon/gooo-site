@@ -1,11 +1,31 @@
+const unknownBinding=(stage,step,reason,next_operation)=>({state:'UNKNOWN',stage,step,reason,unknown_class:'DIRECT_MISSING',next_operation,blocked_by:[]});
+
+export function bindNativeEvidence(atlas,evidence){
+  const sourceHeadMatch=typeof atlas.source_sha==='string'&&atlas.source_sha===evidence.source_head_sha;
+  if(!sourceHeadMatch)return {source_head_match:false,meta_operation:unknownBinding('SOURCE_IDENTITY','EXACT_HEAD','SOURCE_HEAD_MISMATCH_OR_MISSING','VERIFY_EXACT_SOURCE_HEAD_BEFORE_BINDING'),activity:{...unknownBinding('SOURCE_IDENTITY','EXACT_HEAD','SOURCE_HEAD_IDENTITY_REQUIRED_BEFORE_ACTIVITY_BINDING','VERIFY_EXACT_SOURCE_HEAD_BEFORE_BINDING'),lexical_candidates:[]},contract:{...unknownBinding('SOURCE_IDENTITY','EXACT_HEAD','SOURCE_HEAD_IDENTITY_REQUIRED_BEFORE_CONTRACT_BINDING','VERIFY_EXACT_SOURCE_HEAD_BEFORE_BINDING'),metric_count:0,source_contract_count:0,missing_metric_ids:[]}};
+  const concepts=atlas.concepts.filter(concept=>concept.meta_operation===evidence.eligibility_receipt.meta_operation);
+  const concept=concepts.length===1?concepts[0]:null;
+  const operation=concept?{state:'SOURCE_BOUND',stage:'META_OPERATION_BINDING',step:'EXACT_SOURCE_CONCEPT',id:evidence.eligibility_receipt.meta_operation,concept_id:concept.id,code_bindings:concept.code_bindings}:unknownBinding('META_OPERATION_BINDING','EXACT_SOURCE_CONCEPT',concepts.length?'MULTIPLE_SOURCE_CONCEPTS_MATCH_META_OPERATION':'META_OPERATION_NOT_FOUND_IN_SOURCE_CONCEPTS','EXPORT_EXACT_SOURCE_META_OPERATION_BINDING');
+  const activityCandidates=concept?atlas.activities.filter(activity=>concept.code_bindings.includes(activity.reference.path)):[];
+  const activity={...unknownBinding('ACTIVITY_BINDING','EXACT_ACTIVITY_TO_NATIVE_RECEIPT','LEXICAL_ACTIVITY_CANDIDATE_IS_NOT_AN_EXPLICIT_NATIVE_RECEIPT_LINK','RECORD_EXPLICIT_ACTIVITY_TO_NATIVE_RECEIPT_BINDING'),candidate_count:activityCandidates.length,lexical_candidates:activityCandidates.map(activity=>({name:activity.name,reference:activity.reference}))};
+  if(!activityCandidates.length)activity.reason='NO_EXACT_LEXICAL_GOOO_ACTIVITY_BINDING_IN_SOURCE_CATALOG';
+  else if(activityCandidates.length>1)activity.reason='MULTIPLE_LEXICAL_ACTIVITIES_MATCH_SOURCE_BINDING';
+  const metricIDs=concept?.metric_bindings??[];
+  const contracts=(atlas.source_contracts?.calls??[]).filter(contract=>metricIDs.includes(contract.metric_id));
+  const missingMetricIDs=metricIDs.filter(id=>!contracts.some(contract=>contract.metric_id===id));
+  const contract=metricIDs.length>0&&missingMetricIDs.length===0?{state:'SOURCE_BOUND',stage:'SOURCE_CONTRACT_BINDING',step:'EXACT_RELEASE_METRIC_CONTRACTS',metric_count:metricIDs.length,source_contract_count:contracts.length}:{...unknownBinding('SOURCE_CONTRACT_BINDING','EXACT_RELEASE_METRIC_CONTRACTS','NATIVE_RELEASE_METRIC_CONTRACT_BINDING_INCOMPLETE','EXPORT_OR_BIND_EACH_RELEASE_METRIC_CONTRACT'),metric_count:metricIDs.length,source_contract_count:contracts.length,missing_metric_ids:missingMetricIDs};
+  return {source_head_match:sourceHeadMatch,meta_operation:operation,activity,contract};
+}
+
 export const nativeEvidence={
   schema:'gooo/native-release-readiness-evidence/v1',
   source_repository:'kimjooyoon/meta-ontology-go',
   source_head_sha:'132fb3c8d2a391aa6a5a9ea47d13493b00182e5a',
   observation_state:'EXACT_HEAD_SUPPLIED_NOT_INGESTED',
-  ingestion:{state:'UNKNOWN',unknown_class:'CROSS_PROJECT_ARTIFACT_NOT_INGESTED',reason:'SITE_CI_DOES_NOT_INGEST_THE_CROSS_PROJECT_NATIVE_ARTIFACT',next_operation:'AUTHENTICATED_DOWNLOAD_AND_DIGEST_VERIFY_NATIVE_ARTIFACT',blocked_by:['cross_project_artifact_ingestion_credential']},
+  ingestion:{state:'UNKNOWN',stage:'CROSS_PROJECT_INGESTION',step:'NATIVE_ARTIFACT_DOWNLOAD_AND_DIGEST_VERIFY',reason:'SITE_CI_NATIVE_ARTIFACT_INGESTION_ADAPTER_NOT_IMPLEMENTED_OR_RUN',unknown_class:'DIRECT_MISSING',next_operation:'IMPLEMENT_AND_RUN_NATIVE_ARTIFACT_DOWNLOAD_AND_DIGEST_VERIFY',blocked_by:[]},
   workflow:{name:'gooo-release-readiness',run_id:34521687942,url:'https://github.com/kimjooyoon/meta-ontology-go/actions/runs/34521687942'},
-  artifact:{id:10169972879,name:'gooo-release-final-132fb3c8d2a391aa6a5a9ea47d13493b00182e5a',digest:'sha256:31b3d04d823bc55118acd679dac4e56d368daad500493ecc213642775adba416',api_size_bytes:1047,contains:['eligibility.json']},
+  artifact:{id:10169972879,name:'gooo-release-final-132fb3c8d2a391aa6a5a9ea47d13493b00182e5a',kind:'FINAL_ELIGIBILITY_PROJECTION',digest:'sha256:31b3d04d823bc55118acd679dac4e56d368daad500493ecc213642775adba416',api_size_bytes:1047,contains:['eligibility.json']},
+  aggregate_report_artifact:{id:10169966229,kind:'AGGREGATE_RELEASE_REPORT_ARTIFACT',observation_state:'IDENTITY_ONLY_NOT_INGESTED'},
   eligibility_receipt:{path:'eligibility.json',schema:'gooo/release-eligibility/v1',head_sha:'132fb3c8d2a391aa6a5a9ea47d13493b00182e5a',source_report_schema:'gooo/toolchain-cross-platform-release-report/v1',source_report_digest:'sha256:ec928b515fc3e0a2a312b13a4554020b2cbf307d8aa053ab16104c34671d1241',concept_digest:'sha256:b9e2dc0494325b860e7e9f50cfb86609adaabcc4e2e944a8038f1236e65fd80f',meta_operation:'assemble-exact-cross-platform-release',reported_decision:'EVIDENCE_CLOSED',reported_resolution:'EXACT',reported_reason:'GOOO_RELEASE_CANDIDATE_EVIDENCE_CLOSED',reported_next_operation:'PUBLISH_GOOO_EXPERIMENTAL_RELEASE',mutation_allowed:false,summary:{total_work:7,closed:7,unknown:0,refuted:0,repository_writes:0},cells:[
     {id:'EXACT_HEAD_BOUND',state:'CLOSED',resolution:'EXACT',proof_choice:'FOUNDATION',numerator:1,denominator:1},
     {id:'PLATFORM_RECEIPTS',state:'CLOSED',resolution:'EXACT',proof_choice:'FOUNDATION',numerator:3,denominator:3},
