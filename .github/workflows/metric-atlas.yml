@@ -48,7 +48,7 @@ jobs:
           cd "$RUNNER_TEMP/atlas-source"
           go test -mod=readonly ./cmd/metric-atlas-export
       - name: Render source-backed map and record collection scope
-        run: node scripts/atlas/render.mjs atlas-output/catalog.json scripts/atlas/template.html atlas-output/metric-map.html
+        run: node scripts/atlas/render.mjs atlas-output/catalog.json scripts/atlas/template.html atlas-output/metric-map.html "$RUNNER_TEMP/atlas-source"
       - name: Verify source field guide vocabulary and unknown-field handling
         shell: bash
         run: |
@@ -94,6 +94,11 @@ jobs:
           test "$(jq -r '.metric_translation_cohort.scope' "$receipt")" = AUDIT_COHORT_NOT_COMPLETENESS_DENOMINATOR
           test "$(jq '.metric_labels_with_untranslated_tokens' "$receipt")" -eq 47
           node scripts/atlas/translation-cohort-cases.mjs "$receipt" | tee "$RUNNER_TEMP/translation-cohort-cases.json"
+      - name: Verify pinned source references and reject false anchors
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/atlas/translation-source-reference-cases.mjs atlas-output/metric-map.html.receipt.json "$RUNNER_TEMP/atlas-source" | tee "$RUNNER_TEMP/translation-source-reference-cases.json"
       - name: Verify partial source contracts and preserved cohort
         shell: bash
         run: |
@@ -121,6 +126,7 @@ jobs:
             cat "$RUNNER_TEMP/source-field-guide-cases.json"
             cat "$RUNNER_TEMP/native-evidence-cases.json"
             cat "$RUNNER_TEMP/translation-cohort-cases.json"
+            cat "$RUNNER_TEMP/translation-source-reference-cases.json"
             echo
             echo 'AST fixture test: executed against collectContracts in the disposable upstream source copy'
           } >> "$GITHUB_STEP_SUMMARY"

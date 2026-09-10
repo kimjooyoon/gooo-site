@@ -42,7 +42,7 @@ for(const id of untranslatedCohortIds){
   if(!record.meaning_status.endsWith('_UNKNOWN')&&state!=='KNOWN')fail('known source-backed meaning has an unexpected UNKNOWN record for '+id);
 }
 const counts=Object.fromEntries([...new Set(receipt.metric_label_traceability_records.map(record=>record.classification))].sort().map(name=>[name,receipt.metric_label_traceability_records.filter(record=>record.classification===name).length]));
-if(counts.MIV_INDICATOR_CANDIDATE_NOT_GLOBAL_METRIC_ID!==5||counts.SOURCE_GENERATED_PREFIX!==10||counts.CODE_LOCATION_CANDIDATE!==1||counts.DOCUMENTED_EXACT_METRIC!==11||counts.SOURCE_EXACT_INDICATOR!==20)fail('fixed classification counts changed');
+if(counts.MIV_INDICATOR_CANDIDATE_NOT_GLOBAL_METRIC_ID!==5||counts.SOURCE_GENERATED_PREFIX!==10||counts.NON_METRIC_CODE_LOCATION!==1||counts.DOCUMENTED_EXACT_METRIC!==11||counts.SOURCE_EXACT_INDICATOR!==20)fail('fixed classification counts changed');
 const missingEvidence=structuredClone(recordById.get('test.passed'));missingEvidence.source_evidence=[];
 if(classifyCounterexample(missingEvidence,'EXACT_INDICATOR_ID')!=='FAIL_CLOSED')fail('missing source evidence did not fail closed');
 const prefixAsMetric=structuredClone(recordById.get('gooo.metric.toolchain.cli-'));
