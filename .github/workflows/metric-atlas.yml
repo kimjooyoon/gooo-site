@@ -83,6 +83,7 @@ jobs:
         run: |
           set -euo pipefail
           catalog=atlas-output/catalog.json
+          jq '{calls: (.source_contracts.calls | length), unresolved_calls: (.source_contracts.unresolved_calls | length), partial_calls: (.source_contracts.partial_calls | length), parsed_production_go_files: .source_contracts.parsed_production_go_files, metrics: (.metrics | length), recognized: ((.source_contracts.calls | length) + (.source_contracts.unresolved_calls | length))}' "$catalog"
           test "$(jq '.source_contracts.calls | length' "$catalog")" -eq 593
           test "$(jq '.source_contracts.unresolved_calls | length' "$catalog")" -eq 97
           test "$(jq '.source_contracts.partial_calls | length' "$catalog")" -eq 97
