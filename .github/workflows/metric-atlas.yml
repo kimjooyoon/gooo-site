@@ -48,7 +48,7 @@ jobs:
           cd "$RUNNER_TEMP/atlas-source"
           go test -mod=readonly ./cmd/metric-atlas-export
       - name: Render source-backed map and record collection scope
-        run: node scripts/atlas/render.mjs atlas-output/catalog.json scripts/atlas/template.html atlas-output/metric-map.html "$RUNNER_TEMP/atlas-source"
+        run: node scripts/atlas/render.mjs atlas-output/catalog.json scripts/atlas/template.html atlas-output/metric-map.html upstream
       - name: Verify source field guide vocabulary and unknown-field handling
         shell: bash
         run: |
@@ -98,7 +98,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/atlas/translation-source-reference-cases.mjs atlas-output/metric-map.html.receipt.json "$RUNNER_TEMP/atlas-source" | tee "$RUNNER_TEMP/translation-source-reference-cases.json"
+          node scripts/atlas/translation-source-reference-cases.mjs atlas-output/metric-map.html.receipt.json upstream | tee "$RUNNER_TEMP/translation-source-reference-cases.json"
       - name: Verify partial source contracts and preserved cohort
         shell: bash
         run: |
