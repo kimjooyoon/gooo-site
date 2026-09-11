@@ -162,6 +162,8 @@ const denominatorBoundaryCorrections={
 };
 for(const [id,calculation] of Object.entries(calculationContracts)){const row=toolchainSemanticTranslationCatalog[id];row.semantic_contract={...row.semantic_contract,calculation_expression:calculation.calculation_expression,calculation_scope:calculation.calculation_scope,calculation_source_evidence:calculation.refs};row.source_evidence=[...row.source_evidence,...calculation.refs];}
 for(const [id,explanation] of Object.entries(explanationCorrections))toolchainSemanticTranslationCatalog[id].explanation=explanation;
+const cliSatisfiedExpression='resolution == ResolutionExact && value == target';
+for(const id of toolchainSemanticTranslationCohortIds.filter(metricID=>metricID.includes('.cli-'))){const row=toolchainSemanticTranslationCatalog[id];if(!row.explanation.includes(cliSatisfiedExpression))row.explanation+=' 공통 source helper의 Satisfied 원문식은 '+cliSatisfiedExpression+'이다.';}
 for(const [id,boundary] of Object.entries(denominatorBoundaryCorrections))toolchainSemanticTranslationCatalog[id].semantic_contract.denominator_boundary=boundary;
 for(const [id,line,anchor] of [['gooo.metric.toolchain.conformance-executed-cases.v1',13,'ExpectedCaseCount'],['gooo.metric.toolchain.conformance-tamper-rejections.v1',16,'ExpectedTamperCount']])toolchainSemanticTranslationCatalog[id].source_evidence.push(sourceRef('internal/meta/languagereadiness/toolchainconformance/contract.go',line,anchor,'fixed_denominator',anchor));
 
