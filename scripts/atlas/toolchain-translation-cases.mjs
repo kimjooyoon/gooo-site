@@ -1,11 +1,13 @@
 import {readFile} from 'node:fs/promises';
+import {verifyIdentityRefinement} from './identity-refinement-contract.mjs';
 import {toolchainSemanticTranslationCatalog,toolchainSemanticTranslationCohortIds} from './metric-translation-catalog.mjs';
 import {pinnedSourceSHA,validateSourceReferences} from './source-reference-validation.mjs';
 
-const [receiptPath,catalogPath,sourceRoot,renderedPath]=process.argv.slice(2);
-if(!receiptPath||!catalogPath||!sourceRoot||!renderedPath)throw Error('receipt, catalog, disposable source root, and rendered atlas are required');
+const [receiptPath,catalogPath,sourceRoot,renderedPath,identityBaselinePath]=process.argv.slice(2);
+if(!receiptPath||!catalogPath||!sourceRoot||!renderedPath||!identityBaselinePath)throw Error('receipt, catalog, disposable source root, rendered atlas, and immutable identity baseline are required');
 const receipt=JSON.parse(await readFile(receiptPath,'utf8'));
 const catalog=JSON.parse(await readFile(catalogPath,'utf8'));
+const identityRefinement=await verifyIdentityRefinement(catalog,identityBaselinePath);
 const rendered=await readFile(renderedPath,'utf8');
 const fail=message=>{throw Error(message)};
 const nonEmpty=value=>typeof value==='string'&&value.trim().length>0;
@@ -27,9 +29,9 @@ const rawSourceCalls=catalog.source_contracts?.calls??[];
 const renderedSourceCalls=(renderedAtlas.metrics??[]).flatMap(metric=>metric.source_contracts??[]);
 const rawSourceIDs=new Set(rawSourceCalls.map(call=>call.metric_id));
 const rawExactCalls=rawSourceCalls.filter(call=>exactIds.includes(call.metric_id));
-if(rawSourceCalls.length!==593||rawSourceIDs.size!==574)fail('raw source constructor call cohort changed');
+if(rawSourceCalls.length!==identityRefinement.expectedCalls||rawSourceIDs.size!==identityRefinement.expectedIDs)fail('raw source constructor population differs from the immutable refinement contract');
 if(rawExactCalls.length!==exactIds.length||new Set(rawExactCalls.map(call=>call.metric_id)).size!==exactIds.length||JSON.stringify([...new Set(rawExactCalls.map(call=>call.metric_id))].sort())!==JSON.stringify([...exactIds].sort()))fail('raw source catalog exact TOOLCHAIN ID set changed');
-if(renderedSourceCalls.length!==rawSourceCalls.length||JSON.stringify(callMultiset(renderedSourceCalls))!==JSON.stringify(callMultiset(rawSourceCalls)))fail('rendered atlas did not preserve the raw 593 source-call identities');
+if(renderedSourceCalls.length!==rawSourceCalls.length||JSON.stringify(callMultiset(renderedSourceCalls))!==JSON.stringify(callMultiset(rawSourceCalls)))fail('rendered atlas did not preserve the exact contracted source-call multiset');
 const expectedCalculations={
   'gooo.metric.toolchain.cli-readiness-bps.v1':'summary.ReadinessBPS = summary.Satisfied * 10000 / FixedTotal',
   'gooo.metric.toolchain.format-fix-readiness-bps.v1':'summary.ReadinessBPS = summary.Satisfied * 10000 / FixedTotal',
@@ -103,4 +105,4 @@ const counterexamples={
   prefix_reclassified:expectFailClosed('prefix_reclassified',candidate=>{candidate.find(record=>record.identifier.endsWith('cli-readiness-bps.v1')).identifier_kind='DYNAMIC_METRIC_PREFIX';}),
   fabricated_meaning:expectFailClosed('fabricated_meaning',candidate=>{candidate.find(record=>record.identifier.endsWith('lsp-readiness-bps.v1')).semantic_contract.value_expression='summary.Fabricated';})
 };
-console.log(JSON.stringify({schema:'gooo/source-toolchain-metric-semantic-translation-cases/v2',cohort_total:exactIds.length,source_backed_records:records.length,source_head_sha:pinnedSourceSHA,source_reference_validation:validation,raw_source_call_count:rawSourceCalls.length,raw_source_unique_metric_id_count:rawSourceIDs.size,raw_exact_toolchain_call_count:rawExactCalls.length,rendered_source_call_count:renderedSourceCalls.length,joined_exact_metric_id_count:joinedUniqueIDs.size,joined_metric_status_counts:{source_explained:sourceExplainedCount,acronym_unknown:acronymUnknownCount,semantic20_source_backed_method:semanticMethodCount,identifier_source_backed_method:identifierMethodCount,glossary_only_method:glossaryOnlyCount,no_traceability_method:noTraceabilityCount},semantic_population:{expected_existing_ids:exactIds.length,actual_source_backed_semantic_rows:semanticMethodCount},legacy_translation_cohort:{total:47,labels_with_untranslated_tokens:receipt.metric_labels_with_untranslated_tokens,scope:'AUDIT_COHORT_NOT_COMPLETENESS_DENOMINATOR'},counterexamples,scope:'EXACT_EXISTING_TOOLCHAIN_METRIC_IDS_SOURCE_BOUND_SEMANTIC_TRANSLATION_NOT_GLOBAL_COMPLETION_OR_SCORE'}));
+console.log(JSON.stringify({schema:'gooo/source-toolchain-metric-semantic-translation-cases/v3',identity_dependency_refinement:identityRefinement.report,cohort_total:exactIds.length,source_backed_records:records.length,source_head_sha:pinnedSourceSHA,source_reference_validation:validation,raw_source_call_count:rawSourceCalls.length,raw_source_unique_metric_id_count:rawSourceIDs.size,raw_exact_toolchain_call_count:rawExactCalls.length,rendered_source_call_count:renderedSourceCalls.length,joined_exact_metric_id_count:joinedUniqueIDs.size,joined_metric_status_counts:{source_explained:sourceExplainedCount,acronym_unknown:acronymUnknownCount,semantic20_source_backed_method:semanticMethodCount,identifier_source_backed_method:identifierMethodCount,glossary_only_method:glossaryOnlyCount,no_traceability_method:noTraceabilityCount},semantic_population:{expected_existing_ids:exactIds.length,actual_source_backed_semantic_rows:semanticMethodCount},legacy_translation_cohort:{total:47,labels_with_untranslated_tokens:receipt.metric_labels_with_untranslated_tokens,scope:'AUDIT_COHORT_NOT_COMPLETENESS_DENOMINATOR'},counterexamples,scope:'EXACT_EXISTING_TOOLCHAIN_METRIC_IDS_SOURCE_BOUND_SEMANTIC_TRANSLATION_NOT_GLOBAL_COMPLETION_OR_SCORE'}));

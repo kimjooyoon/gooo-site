@@ -32,6 +32,18 @@ jobs:
           go-version: '1.27.0'
           cache: true
           cache-dependency-path: upstream/go.sum
+      - name: Fetch immutable prior map as a data-only identity baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          baseline="$RUNNER_TEMP/metric-atlas-baseline.html"
+          curl --fail --silent --show-error --proto '=https' --tlsv1.2 \
+            --connect-timeout 10 --max-time 90 --retry 2 --retry-max-time 120 \
+            --max-filesize 16000000 \
+            'https://raw.githubusercontent.com/kimjooyoon/gooo-site/fa01006ab1f38dea20cc7fe5f57e81ec617ff5a1/metric-map.html' \
+            --output "$baseline"
+          test "$(wc -c < "$baseline")" -eq 15557382
+          printf '%s  %s\n' '883eb55ba3e7951075b16181621f1927113cf949c6651d1a560e89e90ac02e06' "$baseline" | sha256sum --check --status
       - name: Export existing registries from a disposable source copy
         shell: bash
         run: |
@@ -144,15 +156,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/atlas/toolchain-translation-cases.mjs atlas-output/metric-map.html.receipt.json atlas-output/catalog.json upstream atlas-output/metric-map.html | tee "$RUNNER_TEMP/toolchain-translation-cases.json"
+          node scripts/atlas/toolchain-translation-cases.mjs atlas-output/metric-map.html.receipt.json atlas-output/catalog.json upstream atlas-output/metric-map.html "$RUNNER_TEMP/metric-atlas-baseline.html" | tee "$RUNNER_TEMP/toolchain-translation-cases.json"
       - name: Verify partial source contracts and preserved cohort
         shell: bash
         run: |
           set -euo pipefail
           catalog=atlas-output/catalog.json
-          test "$(jq '.source_contracts.calls | length' "$catalog")" -eq 593
-          test "$(jq '.source_contracts.unresolved_calls | length' "$catalog")" -eq 97
-          test "$(jq '.source_contracts.partial_calls | length' "$catalog")" -eq 97
+          # Exact populations and record preservation are checked by the shared
+          # immutable baseline contract in all three source-contract consumers.
           test "$(jq '.source_contracts.parsed_production_go_files' "$catalog")" -eq 4456
           test "$(jq '.metrics | length' "$catalog")" -eq 1094
           test "$(jq '(.source_contracts.calls | length) + (.source_contracts.unresolved_calls | length)' "$catalog")" -eq 690
@@ -163,7 +174,7 @@ jobs:
           jq -e '.source_contracts.partial_calls | all(.unknown | (.stage != "ARGUMENT_BINDING" or (.unknown_class == "DIRECT_MISSING" and (.blocked_by | type == "array" and length == 0))))' "$catalog" >/dev/null
           jq -e '.source_contracts.partial_calls | all((has("metric_id") | not) and (.resolution | type == "string" and length > 0 and . == "PARTIAL_SOURCE_CONTRACT_UNKNOWN_NOT_RUNTIME_PROOF") and ([.unknown.stage,.unknown.step,.unknown.reason,.unknown.unknown_class,.unknown.next_operation] | all(type == "string" and length > 0)) and (.unknown.blocked_by | type == "array" and all(type == "string" and length > 0)) and (.unknown.missing_fields | type == "array" and all(type == "string" and length > 0)) and ((.unknown.unknown_class == "DIRECT_MISSING" and (.unknown.blocked_by | length == 0)) or (.unknown.unknown_class == "DEPENDENCY_BLOCKED" and (.unknown.blocked_by | length > 0))))' "$catalog" >/dev/null
           jq -e '.source_contracts.partial_calls | all(if .unknown.stage == "HELPER_SELECTION" then (.helper_candidates | type == "array" and length > 0) and ((.helper_candidates | map(.candidate_id)) as $ids | ($ids | all(type == "string" and length > 0)) and (($ids | unique | length) == ($ids | length))) and (.unknown.blocked_by | type == "array" and all(type == "string" and length > 0)) and ((.unknown.blocked_by | sort) == (.helper_candidates | map(.candidate_id) | sort)) else true end)' "$catalog" >/dev/null
-          node scripts/atlas/partial-contract-cases.mjs "$catalog" | tee "$RUNNER_TEMP/partial-contract-cases.json"
+          node scripts/atlas/partial-contract-cases.mjs "$catalog" "$RUNNER_TEMP/metric-atlas-baseline.html" | tee "$RUNNER_TEMP/partial-contract-cases.json"
           {
             echo '## Partial source contract checks'
             echo
@@ -182,7 +193,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/atlas/source-definition-binding-cases.mjs atlas-output/metric-map.html.receipt.json atlas-output/metric-map.html | tee "$RUNNER_TEMP/source-definition-binding-cases.json"
+          node scripts/atlas/source-definition-binding-cases.mjs atlas-output/metric-map.html.receipt.json atlas-output/metric-map.html "$RUNNER_TEMP/metric-atlas-baseline.html" | tee "$RUNNER_TEMP/source-definition-binding-cases.json"
+          cp "$RUNNER_TEMP/source-definition-binding-cases.json" atlas-output/source-definition-binding-cases.json
           {
             echo
             echo '## Source definition binding checks'

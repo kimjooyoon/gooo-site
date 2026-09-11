@@ -1,8 +1,10 @@
 import {readFile} from 'node:fs/promises';
+import {verifyIdentityRefinement} from './identity-refinement-contract.mjs';
 
-const catalogPath=process.argv[2];
-if(!catalogPath)throw Error('catalog path is required');
+const [catalogPath,identityBaselinePath]=process.argv.slice(2);
+if(!catalogPath||!identityBaselinePath)throw Error('catalog and immutable identity baseline paths are required');
 const atlas=JSON.parse(await readFile(catalogPath,'utf8'));
+const identityRefinement=await verifyIdentityRefinement(atlas,identityBaselinePath);
 const partials=atlas.source_contracts?.partial_calls??[];
 const fail=message=>{throw Error(message)};
 const nonEmptyString=value=>typeof value==='string'&&value.trim().length>0;
@@ -23,7 +25,8 @@ const unknownState=record=>{
 const requireUnknown=record=>{
   if(unknownState(record)!=='UNKNOWN')fail('partial record was promoted or malformed');
 };
-if(partials.length!==97)fail('partial cohort changed');
+// The shared immutable contract preserves every remaining partial and UNKNOWN.
+if(partials.length!==identityRefinement.expectedPartials)fail('partial cohort differs from the immutable refinement contract');
 for(const record of partials)requireUnknown(record);
 const referenceKey=reference=>reference.path+'#'+reference.line+'#'+reference.kind;
 const exactReferenceMultiset=(records,references)=>records.map(record=>referenceKey(record.call)).sort().join('\n')===references.map(referenceKey).sort().join('\n');

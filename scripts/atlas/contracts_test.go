@@ -9,6 +9,178 @@ import (
 	"testing"
 )
 
+func collectIdentityFixture(t *testing.T, content string) ContractInventory {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "fixture.go")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	inventory, err := collectContracts([]Source{{Path: path}}, "fixture-source-sha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return inventory
+}
+
+func TestIdentityDependenciesPreserveIntegrationTargets(t *testing.T) {
+	// Exact source expressions and coordinates from upstream 132fb3c8.
+	// These are AST fixtures, not execution evidence for Summary or Status.
+	inventory := collectIdentityFixture(t, `package integrationprogress
+
+func buildIndicators(summary Summary) []Indicator {
+	return []Indicator{
+		targetIndicator("gooo.metric.integration-progress.cells-closed.v1", "OUTCOME", "foundation", int64(summary.ClosedCells), int64(summary.CellsTotal), "cells", equalityStatus(summary.ClosedCells, summary.CellsTotal)),
+		targetIndicator("gooo.metric.integration-progress.merges.v1", "OUTCOME", "foundation", int64(summary.MergedPullRequests), int64(summary.PullRequestsTotal), "pull_requests", equalityStatus(summary.MergedPullRequests, summary.PullRequestsTotal)),
+		targetIndicator("gooo.metric.integration-progress.evidence-reachable.v1", "DRIVER", "coherence", int64(summary.EvidenceReachable), int64(summary.PullRequestsTotal), "pull_requests", equalityStatus(summary.EvidenceReachable, summary.PullRequestsTotal)),
+		targetIndicator("gooo.metric.integration-progress.evidenced-merges.v1", "OUTCOME", "coherence", int64(summary.EvidencedMerges), int64(summary.PullRequestsTotal), "pull_requests", equalityStatus(summary.EvidencedMerges, summary.PullRequestsTotal)),
+		targetIndicator("gooo.metric.integration-progress.unknown-cells.v1", "GUARDRAIL", "foundation", int64(summary.UnknownCells), 0, "cells", zeroStatus(summary.UnknownCells, StateUnknown)),
+		targetIndicator("gooo.metric.integration-progress.queue-observation-unknown.v1", "GUARDRAIL", "foundation", int64(summary.QueueObservationUnknown), 0, "observations", zeroStatus(summary.QueueObservationUnknown, StateUnknown)),
+		targetIndicator("gooo.metric.integration-progress.refuted-cells.v1", "GUARDRAIL", "coherence", int64(summary.RefutedCells), 0, "cells", zeroStatus(summary.RefutedCells, StateRefuted)),
+		observedIndicator("gooo.metric.integration-progress.run-start-delay-seconds-total.v1", "DRIVER", "coherence", summary.RunStartDelaySecondsTotal, "seconds"),
+		observedIndicator("gooo.metric.integration-progress.execution-seconds-total.v1", "DRIVER", "coherence", summary.ExecutionSecondsTotal, "seconds"),
+		observedIndicator("gooo.metric.integration-progress.queued-runs-snapshot.v1", "DRIVER", "foundation", int64(summary.QueuedRunsSnapshot), "runs"),
+		observedIndicator("gooo.metric.integration-progress.in-progress-runs-snapshot.v1", "DRIVER", "foundation", int64(summary.InProgressRunsSnapshot), "runs"),
+		observedIndicator("gooo.metric.integration-progress.queue-pressure-bps.v1", "DRIVER", "coherence", int64(summary.QueuePressureBasisPoints), "basis_points"),
+		observedIndicator("gooo.metric.integration-progress.evidence-latency-seconds-total.v1", "DRIVER", "coherence", summary.EvidenceLatencySecondsTotal, "seconds"),
+		observedIndicator("gooo.metric.integration-progress.merge-after-evidence-seconds-total.v1", "DRIVER", "coherence", summary.MergeAfterEvidenceSecondsTotal, "seconds"),
+		targetIndicator("gooo.metric.integration-progress.repository-writes.v1", "GUARDRAIL", "regression", 0, 0, "writes", "SATISFIED"),
+	}
+}
+
+func targetIndicator(id, class, proof string, value, target int64, unit, status string) Indicator {
+	return Indicator{MetricID: id, Class: class, ProofChoice: proof, Value: value, Target: &target,
+		Unit: unit, Relation: "EQUAL", Status: status, Producer: "integrationprogress.Evaluate",
+		Consumer: "integration-progress-scorecard", MetaOperation: MetaOperation}
+}
+
+func observedIndicator(id, class, proof string, value int64, unit string) Indicator {
+	return Indicator{MetricID: id, Class: class, ProofChoice: proof, Value: value, Unit: unit,
+		Relation: "OBSERVE", Status: "OBSERVED", Producer: "integrationprogress.Evaluate",
+		Consumer: "integration-progress-scorecard", MetaOperation: MetaOperation}
+}
+
+func equalityStatus(value, target int) string {
+	if value == target {
+		return "SATISFIED"
+	}
+	return "OPEN"
+}
+
+func zeroStatus(value int, failure string) string {
+	if value == 0 {
+		return "SATISFIED"
+	}
+	return failure
+}
+`)
+	expected := map[int]string{
+		5: "gooo.metric.integration-progress.cells-closed.v1",
+		6: "gooo.metric.integration-progress.merges.v1",
+		7: "gooo.metric.integration-progress.evidence-reachable.v1",
+		8: "gooo.metric.integration-progress.evidenced-merges.v1",
+		9: "gooo.metric.integration-progress.unknown-cells.v1",
+		10: "gooo.metric.integration-progress.queue-observation-unknown.v1",
+		11: "gooo.metric.integration-progress.refuted-cells.v1",
+		19: "gooo.metric.integration-progress.repository-writes.v1",
+	}
+	if len(inventory.Calls) != 15 || len(inventory.PartialCalls) != 0 || len(inventory.UnresolvedCalls) != 0 {
+		t.Fatalf("integration call population changed: %+v", inventory)
+	}
+	found := 0
+	for _, call := range inventory.Calls {
+		id, target := expected[call.Call.Line]
+		if !target {
+			continue
+		}
+		found++
+		if call.MetricID != id || call.Arguments["id"] != fmt.Sprintf("%q", id) || call.Helper.Line != 23 || call.ResultFields["MetricID"] != "id" || call.ResultFields["Target"] != "&target" || call.ResultFields["Value"] != "value" || call.Resolution != "SYMBOLIC_SOURCE_CONTRACT_NOT_RUNTIME_PROOF" {
+			t.Fatalf("integration identity or raw fields changed at line %d: %+v", call.Call.Line, call)
+		}
+	}
+	if found != len(expected) {
+		t.Fatalf("resolved target calls = %d, want %d", found, len(expected))
+	}
+}
+
+func TestIdentityDependencyBoundaries(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		call string
+		extra string
+		want string
+		stage string
+	}{
+		{name: "unchanged argument", body: "return Indicator{MetricID: id, Value: value, Target: &target}", want: "gooo.metric.fixture"},
+		{name: "unrelated mutations", body: "value++; target = 2; sink(&target); return Indicator{MetricID: id, Value: value, Target: &target}", want: "gooo.metric.fixture"},
+		{name: "literal independent of mutated argument", body: "id = \"changed\"; return Indicator{MetricID: \"fixed\", Target: &target}", want: "fixed"},
+		{name: "constant concatenation", body: "return Indicator{MetricID: prefix + id, Target: &target}", call: "helper(\"fixture\", 1, 2)", want: "gooo.metric.fixture"},
+		{name: "ID field", body: "return Indicator{ID: id, Target: &target}", want: "gooo.metric.fixture"},
+		{name: "unrelated shadow", body: "{ target := 3; sink(&target) }; return Indicator{MetricID: id, Target: &target}", want: "gooo.metric.fixture"},
+		{name: "assignment", body: "id = \"changed\"; return Indicator{MetricID: id}"},
+		{name: "tuple assignment", body: "id, value = \"changed\", 3; return Indicator{MetricID: id}"},
+		{name: "compound assignment", body: "id += \"changed\"; return Indicator{MetricID: id}"},
+		{name: "parenthesized assignment", body: "(id) = \"changed\"; return Indicator{MetricID: id}"},
+		{name: "increment AST", body: "id++; return Indicator{MetricID: id}"},
+		{name: "range assignment", body: "for _, id = range []string{\"changed\"} {}; return Indicator{MetricID: id}"},
+		{name: "address escape", body: "sink(&id); return Indicator{MetricID: id}"},
+		{name: "parenthesized address", body: "sink(&(id)); return Indicator{MetricID: id}"},
+		{name: "pointer alias", body: "alias := &id; *alias = \"changed\"; return Indicator{MetricID: id}"},
+		{name: "closure mutation", body: "f := func() { id = \"changed\" }; f(); return Indicator{MetricID: id}"},
+		{name: "closure capture", body: "f := func() string { return id }; sink(f); return Indicator{MetricID: id}"},
+		{name: "identity alias", body: "alias := id; return Indicator{MetricID: alias}"},
+		{name: "shadowed identity", body: "{ id := \"shadow\"; return Indicator{MetricID: id} }"},
+		{name: "indexed argument", body: "return Indicator{MetricID: id}", call: "helper(fixedMetricBindings[0], 1, 2)"},
+		{name: "dynamic argument", body: "return Indicator{MetricID: id}", call: "helper(artifact.Name, 1, 2)"},
+		{name: "dynamic result", body: "return Indicator{MetricID: makeID(id)}"},
+		{name: "multiple identities", body: "if value > 0 { return Indicator{MetricID: id} }; return Indicator{MetricID: \"different\"}"},
+		{name: "constant cycle", extra: "const first = second; const second = first", body: "return Indicator{MetricID: first}"},
+		{name: "ambiguous helper", extra: "func helper(id string, value, target int64) Indicator { return Indicator{MetricID: id} }", body: "return Indicator{MetricID: id}", stage: "HELPER_SELECTION"},
+		{name: "argument arity", body: "return Indicator{MetricID: id}", call: "helper(\"gooo.metric.fixture\")", stage: "ARGUMENT_BINDING"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			call := test.call
+			if call == "" {
+				call = "helper(\"gooo.metric.fixture\", 1, 2)"
+			}
+			content := "package fixture\n" +
+				"type Indicator struct { MetricID, ID string; Value int64; Target *int64 }\n" +
+				"const prefix = \"gooo.metric.\"\n" +
+				"var fixedMetricBindings = []string{\"gooo.metric.fixture\"}\n" +
+				"var artifact struct { Name string }\n" + test.extra + "\n" +
+				"func helper(id string, value, target int64) Indicator { " + test.body + " }\n" +
+				"func use() Indicator { return " + call + " }\n"
+			inventory := collectIdentityFixture(t, content)
+			if test.want != "" {
+				if len(inventory.Calls) != 1 || inventory.Calls[0].MetricID != test.want || len(inventory.PartialCalls) != 0 || len(inventory.UnresolvedCalls) != 0 {
+					t.Fatalf("literal identity was not preserved: %+v", inventory)
+				}
+				return
+			}
+			if len(inventory.Calls) != 0 || len(inventory.PartialCalls) != 1 || len(inventory.UnresolvedCalls) != 1 {
+				t.Fatalf("unsupported identity was promoted or lost: %+v", inventory)
+			}
+			partial := inventory.PartialCalls[0]
+			stage := test.stage
+			if stage == "" {
+				stage = "STATIC_METRIC_IDENTITY"
+			}
+			unknown := partial.Unknown
+			if unknown.Stage != stage || unknown.Step == "" || unknown.Reason == "" || unknown.UnknownClass == "" || unknown.NextOperation == "" || unknown.BlockedBy == nil || len(unknown.MissingFields) == 0 || partial.Resolution != "PARTIAL_SOURCE_CONTRACT_UNKNOWN_NOT_RUNTIME_PROOF" || len(partial.HelperCandidates) == 0 {
+				t.Fatalf("UNKNOWN source context was lost: %+v", partial)
+			}
+			if stage == "HELPER_SELECTION" {
+				if unknown.UnknownClass != "DEPENDENCY_BLOCKED" || len(unknown.BlockedBy) != 2 {
+					t.Fatalf("ambiguous identity frontier = %+v", unknown)
+				}
+			} else if unknown.UnknownClass != "DIRECT_MISSING" || len(unknown.BlockedBy) != 0 {
+				t.Fatalf("direct UNKNOWN frontier = %+v", unknown)
+			}
+		})
+	}
+}
+
 func releaseMetricFixtureFiles() map[string]string {
 	return map[string]string{
 		"internal/meta/languagereadiness/toolchainrelease/metrics.go": `package toolchainrelease
