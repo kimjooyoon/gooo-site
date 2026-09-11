@@ -1,5 +1,5 @@
 import {readFile} from 'node:fs/promises';
-import {createHash} from 'node:crypto';
+import {verifyIdentityRefinement} from './identity-refinement-contract.mjs';
 import * as vm from 'node:vm';
 import {languageSemanticFamilySpecs,languageSemanticTranslationCohortIds,toolchainSemanticTranslationCohortIds} from './metric-translation-catalog.mjs';
 import {sourceExactHelperContractSpecs,sourceExactHelperContractMatches,primarySourceBlockMatches} from './source-exact-helper-contracts.mjs';
@@ -15,118 +15,7 @@ const end=start<0?-1:rendered.indexOf('</script>',start+marker.length);
 if(start<0||end<0)throw Error('rendered atlas data marker is missing');
 const catalog=JSON.parse(rendered.slice(start+marker.length,end));
 const fail=message=>{throw Error(message)};
-const identityBaselinePath=process.argv[4];
-if(!identityBaselinePath)fail('immutable identity baseline HTML path is required');
-const identityBaselineBytes=await readFile(identityBaselinePath);
-const identityBaselineSHA256='883eb55ba3e7951075b16181621f1927113cf949c6651d1a560e89e90ac02e06';
-if(identityBaselineBytes.length!==15557382||createHash('sha256').update(identityBaselineBytes).digest('hex')!==identityBaselineSHA256)fail('immutable identity baseline byte length or digest mismatch');
-const identityBaselineText=identityBaselineBytes.toString('utf8');
-const identityBaselineStart=identityBaselineText.indexOf(marker);
-const identityBaselineEnd=identityBaselineStart<0?-1:identityBaselineText.indexOf('</script>',identityBaselineStart+marker.length);
-if(identityBaselineStart<0||identityBaselineEnd<0||identityBaselineText.indexOf(marker,identityBaselineStart+marker.length)!==-1)fail('immutable baseline JSON payload boundary is missing or ambiguous');
-// Parse the pinned JSON payload only. Never execute the baseline HTML script.
-const identityBaseline=JSON.parse(identityBaselineText.slice(identityBaselineStart+marker.length,identityBaselineEnd));
-const identitySourceSHA='132fb3c8d2a391aa6a5a9ea47d13493b00182e5a';
-const identitySourcePath='internal/meta/integrationprogress/indicators.go';
-const identitySourcePackage='internal/meta/integrationprogress:integrationprogress';
-const identityExpectedRows=[
-  {
-    "line": 5,
-    "id": "gooo.metric.integration-progress.cells-closed.v1"
-  },
-  {
-    "line": 6,
-    "id": "gooo.metric.integration-progress.merges.v1"
-  },
-  {
-    "line": 7,
-    "id": "gooo.metric.integration-progress.evidence-reachable.v1"
-  },
-  {
-    "line": 8,
-    "id": "gooo.metric.integration-progress.evidenced-merges.v1"
-  },
-  {
-    "line": 9,
-    "id": "gooo.metric.integration-progress.unknown-cells.v1"
-  },
-  {
-    "line": 10,
-    "id": "gooo.metric.integration-progress.queue-observation-unknown.v1"
-  },
-  {
-    "line": 11,
-    "id": "gooo.metric.integration-progress.refuted-cells.v1"
-  },
-  {
-    "line": 19,
-    "id": "gooo.metric.integration-progress.repository-writes.v1"
-  }
-];
-const identityCanonical=value=>JSON.stringify((function canonical(item){
-  if(Array.isArray(item))return item.map(canonical);
-  if(item!==null&&typeof item==='object')return Object.fromEntries(Object.keys(item).sort().map(key=>[key,canonical(item[key])]));
-  return item;
-})(value));
-const identitySameMultiset=(left,right)=>identityCanonical(left.map(identityCanonical).sort())===identityCanonical(right.map(identityCanonical).sort());
-const identityCallKey=(source,record)=>identityCanonical([source.source_sha,record.package_scope,record.call.path,record.call.line,record.call.kind]);
-const identityReferenceKey=reference=>identityCanonical([reference.path,reference.line,reference.kind]);
-const identityExpectedKeys=new Set(identityExpectedRows.map(row=>identityCanonical([identitySourceSHA,identitySourcePackage,identitySourcePath,row.line,'indicator_constructor_call'])));
-const identityBaselineInventory=identityBaseline.source_contracts;
-if(identityBaseline.source_sha!==identitySourceSHA||identityBaselineInventory?.source_sha!==identitySourceSHA||identityBaselineInventory.calls?.length!==593||new Set(identityBaselineInventory.calls.map(call=>call.metric_id)).size!==574||identityBaselineInventory.partial_calls?.length!==97||identityBaselineInventory.unresolved_calls?.length!==97||identityBaselineInventory.calls.length+identityBaselineInventory.unresolved_calls.length!==690)fail('immutable identity baseline source or fixed population mismatch');
-const identityExpectedFields={Class:'class',Consumer:'"integration-progress-scorecard"',MetaOperation:'MetaOperation',MetricID:'id',Producer:'"integrationprogress.Evaluate"',ProofChoice:'proof',Relation:'"EQUAL"',Status:'status',Target:'&target',Unit:'unit',Value:'value'};
-const identityResolvedAdditions=identityExpectedRows.map(row=>{
-  const matches=identityBaselineInventory.partial_calls.filter(partial=>identityCallKey(identityBaseline,partial)===identityCanonical([identitySourceSHA,identitySourcePackage,identitySourcePath,row.line,'indicator_constructor_call']));
-  if(matches.length!==1)fail('expected identity coordinate is absent or duplicated in immutable baseline: '+row.line);
-  const partial=matches[0];
-  const helper=partial.helper_candidates?.[0];
-  if(partial.source_sha!==identitySourceSHA||partial.helper_candidates.length!==1||helper.name!=='targetIndicator'||helper.reference.path!==identitySourcePath||helper.reference.line!==23||helper.reference.kind!=='indicator_constructor_definition'||helper.result_field_sets?.length!==1||identityCanonical(helper.result_field_sets[0])!==identityCanonical(identityExpectedFields)||partial.argument_expressions?.id!==JSON.stringify(row.id)||identityCanonical(helper.argument_expressions)!==identityCanonical(partial.argument_expressions))fail('immutable integration target helper or raw identity contract changed: '+row.id);
-  return {metric_id:row.id,package_scope:partial.package_scope,call:partial.call,helper:helper.reference,helper_signature:helper.helper_signature,argument_expressions:partial.argument_expressions,result_field_expressions:helper.result_field_sets[0],resolution:'SYMBOLIC_SOURCE_CONTRACT_NOT_RUNTIME_PROOF'};
-});
-const identityExpectedCallRecords=[...identityBaselineInventory.calls,...identityResolvedAdditions];
-const identityExpectedPartialRecords=identityBaselineInventory.partial_calls.filter(partial=>!identityExpectedKeys.has(identityCallKey(identityBaseline,partial)));
-const identityRemovedReferenceKeys=new Set(identityResolvedAdditions.map(call=>identityReferenceKey(call.call)));
-const identityExpectedUnresolved=identityBaselineInventory.unresolved_calls.filter(ref=>!identityRemovedReferenceKeys.has(identityReferenceKey(ref)));
-const identityExpectedCalls=identityExpectedCallRecords.length;
-const identityExpectedIDs=new Set(identityExpectedCallRecords.map(call=>call.metric_id)).size;
-const identityExpectedPartials=identityExpectedPartialRecords.length;
-const identityVerifyRefinement=current=>{
-  const inventory=current.source_contracts;
-  if(current.source_sha!==identitySourceSHA||!inventory)fail('current identity source head or inventory missing');
-  const rest=({calls,partial_calls,unresolved_calls,...other})=>other;
-  if(identityCanonical(rest(inventory))!==identityCanonical(rest(identityBaselineInventory)))fail('source inventory metadata changed outside identity refinement');
-  if(!identitySameMultiset(inventory.calls,identityExpectedCallRecords))fail('existing source calls changed or newly resolved calls differ from exact eight coordinates');
-  if(!identitySameMultiset(inventory.partial_calls,identityExpectedPartialRecords))fail('remaining partial contracts or UNKNOWN records changed');
-  if(!identitySameMultiset(inventory.unresolved_calls,identityExpectedUnresolved)||inventory.calls.length+inventory.unresolved_calls.length!==690)fail('recognized call population or unresolved reference multiset changed');
-};
-identityVerifyRefinement(catalog);
-const identityCounterexamples=[];
-const identityRejectMutation=(name,mutate)=>{
-  const input=structuredClone({source_sha:catalog.source_sha,source_contracts:catalog.source_contracts});
-  mutate(input.source_contracts);
-  let rejected=false;
-  try {identityVerifyRefinement(input);} catch {rejected=true;}
-  if(!rejected)fail('identity refinement counterexample accepted: '+name);
-  identityCounterexamples.push({name,state:'FAIL_CLOSED'});
-};
-identityRejectMutation('EXISTING_RESOLVED_ID_CHANGED',inventory=>{inventory.calls[0].metric_id+='-changed';});
-identityRejectMutation('NEW_TARGET_EXPRESSION_CHANGED',inventory=>{inventory.calls.find(call=>identityExpectedKeys.has(identityCallKey(catalog,call))).result_field_expressions.Target='target';});
-identityRejectMutation('REMAINING_UNKNOWN_REASON_ERASED',inventory=>{delete inventory.partial_calls[0].unknown.reason;});
-identityRejectMutation('EXTRA_RESOLVED_CALL',inventory=>{inventory.calls.push(structuredClone(inventory.calls[0]));});
-identityRejectMutation('SAME_COUNT_PARTIAL_REPLACEMENT',inventory=>{inventory.partial_calls[1]=structuredClone(inventory.partial_calls[0]);});
-identityRejectMutation('FABRICATED_RUNTIME_EVIDENCE',inventory=>{inventory.calls[0].native_evidence='PASS';});
-const identityRefinementReport={
-  schema:'gooo/source-identity-dependency-refinement/v1',
-  source_sha:identitySourceSHA,
-  baseline:{commit:'fa01006ab1f38dea20cc7fe5f57e81ec617ff5a1',path:'metric-map.html',sha256:identityBaselineSHA256,bytes:identityBaselineBytes.length},
-  before:{resolved_calls:identityBaselineInventory.calls.length,unique_metric_ids:new Set(identityBaselineInventory.calls.map(call=>call.metric_id)).size,partial_calls:identityBaselineInventory.partial_calls.length,recognized_calls:690},
-  after:{resolved_calls:catalog.source_contracts.calls.length,unique_metric_ids:new Set(catalog.source_contracts.calls.map(call=>call.metric_id)).size,partial_calls:catalog.source_contracts.partial_calls.length,recognized_calls:690},
-  newly_resolved:identityResolvedAdditions.map(record=>({callsite_key:identityCallKey(catalog,record),...record})),
-  preserved_existing_call_multiset:'PASS',preserved_remaining_partial_multiset:'PASS',
-  counterexamples:identityCounterexamples,
-  observation_scope:'STATIC_SOURCE_IDENTITY_REFINEMENT_NOT_LANGUAGE_RUNTIME_OR_UTILITY',
-  runtime_improvement:'UNKNOWN_NO_COMPARABLE_RUNTIME_PAIR',new_metric_definitions:0
-};
+const {report:identityRefinementReport,expectedCalls:identityExpectedCalls,expectedIDs:identityExpectedIDs,expectedPartials:identityExpectedPartials}=await verifyIdentityRefinement(catalog,process.argv[4]);
 const autonomyCounterexamples=[];
 if(!rendered.includes('sourceExactHelperContractDetail(panel,m)')||!rendered.includes('SOURCE_EXACT helper semantic contract')||!rendered.includes('ORIGINAL class')||!rendered.includes('NOT_PRESENT_IN_SOURCE_HELPER')||!rendered.includes('owner-qualified')||!rendered.includes('language execution이나 완전한 control-flow proof가 아닙니다.'))fail('SOURCE_EXACT helper semantic detail projection is missing');
 const requiredUIProjections=['data-view="operations"','function operationDetail(record,registry)','function assuranceDetail(item)','allMetricProgramOperations=atlas.metric_program_operations??[]','allAssuranceOperations=atlas.assurance_operations??[]','item.metric_id,item.metric_id','같은 이름의 Gooo 선언 위치','정확한 이름 일치로 찾은 선언이며 정식 의미 연결·권한·native 실행 증거가 아닙니다.','동일 이름 lexical activity 없음. name-match source navigation의 빈 상태이며 semantic graph binding/authority/native 실행 증거가 아닙니다.','별도 native receipt가 명시적으로 연결될 때만 관측으로 표시합니다.'];
