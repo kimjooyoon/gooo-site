@@ -140,6 +140,11 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/atlas/translation-source-reference-cases.mjs atlas-output/metric-map.html.receipt.json upstream | tee "$RUNNER_TEMP/translation-source-reference-cases.json"
+      - name: Verify exact TOOLCHAIN semantic translation cohort
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/atlas/toolchain-translation-cases.mjs atlas-output/metric-map.html.receipt.json atlas-output/catalog.json upstream atlas-output/metric-map.html | tee "$RUNNER_TEMP/toolchain-translation-cases.json"
       - name: Verify partial source contracts and preserved cohort
         shell: bash
         run: |
@@ -168,6 +173,7 @@ jobs:
             cat "$RUNNER_TEMP/native-evidence-cases.json"
             cat "$RUNNER_TEMP/translation-cohort-cases.json"
             cat "$RUNNER_TEMP/translation-source-reference-cases.json"
+            cat "$RUNNER_TEMP/toolchain-translation-cases.json"
             cat "$RUNNER_TEMP/release-metric-binding-cases.json"
             echo
             echo 'AST fixture test: executed against collectContracts in the disposable upstream source copy'
