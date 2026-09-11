@@ -617,6 +617,7 @@ const canonicalReplayAggregate=sourceExactHelperRecords.filter(record=>record.me
 if(metricIDs.size!==metrics.length)fail('metric rows contain duplicate IDs');
 const runSourceExactHelperUI=()=>{
   const sourceExactHelperMetricClicks=new Set();
+  navViews.find(button=>button.dataset.view==='metrics').click();
   for(const metricID of expectedSourceExactHelperMetricIDs){
     const metric=metrics.find(item=>item.id===metricID);
     const records=sourceExactHelperRecords.filter(record=>record.metric_id===metricID);
