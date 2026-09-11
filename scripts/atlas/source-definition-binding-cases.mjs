@@ -12,7 +12,7 @@ const end=start<0?-1:rendered.indexOf('</script>',start+marker.length);
 if(start<0||end<0)throw Error('rendered atlas data marker is missing');
 const catalog=JSON.parse(rendered.slice(start+marker.length,end));
 const fail=message=>{throw Error(message)};
-const requiredUIProjections=['data-view="operations"','function operationDetail(record,registry)','function assuranceDetail(item)','allMetricProgramOperations=atlas.metric_program_operations??[]','allAssuranceOperations=atlas.assurance_operations??[]','item.metric_id,item.metric_id','별도 native receipt가 명시적으로 연결될 때만 관측으로 표시합니다.'];
+const requiredUIProjections=['data-view="operations"','function operationDetail(record,registry)','function assuranceDetail(item)','allMetricProgramOperations=atlas.metric_program_operations??[]','allAssuranceOperations=atlas.assurance_operations??[]','item.metric_id,item.metric_id','같은 이름의 Gooo 선언 위치','정확한 이름 일치로 찾은 선언이며 정식 의미 연결·권한·native 실행 증거가 아닙니다.','동일 이름 lexical activity 없음. name-match source navigation의 빈 상태이며 semantic graph binding/authority/native 실행 증거가 아닙니다.','별도 native receipt가 명시적으로 연결될 때만 관측으로 표시합니다.'];
 if(requiredUIProjections.some(projection=>!rendered.includes(projection)))fail('existing UI identity, search projection, assurance metric path, or native boundary is missing');
 class TestElement{
   constructor(tag){this.tagName=tag.toUpperCase();this.children=[];this.listeners=new Map();this.dataset={};this.style={};this.hidden=false;this.disabled=false;this.value='';this._text='';}
@@ -36,6 +36,7 @@ const uiEnd=uiStart<0?-1:rendered.indexOf('</script>',uiStart+8);
 if(uiStart<0||uiEnd<0)fail('rendered UI script boundary is missing');
 vm.runInNewContext(rendered.slice(uiStart+8,uiEnd),{document:uiDocument,console:{log(){},warn(){},error(){}},URL:{createObjectURL(){return '';},revokeObjectURL(){}},Blob:class {},setTimeout(){return 0;},clearTimeout(){}},{filename:'metric-map.html'});
 const descendants=root=>{const result=[];const visit=node=>{if(!(node instanceof TestElement))return;if(node.tagName==='BUTTON')result.push(node);for(const child of node.children)visit(child);};visit(root);return result;};
+const anchors=root=>{const result=[];const visit=node=>{if(!(node instanceof TestElement))return;if(node.tagName==='A')result.push(node);for(const child of node.children)visit(child);};visit(root);return result;};
 const findButton=(root,text)=>descendants(root).find(button=>button.textContent.includes(text));
 const search=uiElements.get('search');
 const setSearch=value=>{search.value=value;search.dispatch('input',{target:search});};
@@ -49,6 +50,20 @@ if(!uiElements.get('content').textContent.includes('고정점에서 종료'))fai
 setSearch('__unrelated_operation_search__');
 if(descendants(uiElements.get('content')).length!==0)fail('unrelated operation search did not return zero rows');
 setSearch('');
+const multiMatchOperation=findButton(uiElements.get('content'),'preserve-repository-workspace');
+if(!multiMatchOperation)fail('one-to-many metric program operation was not selectable');
+multiMatchOperation.click();
+const multiMatchDetail=uiElements.get('detail');
+if(!multiMatchDetail.textContent.includes('같은 이름의 Gooo 선언 위치')||!multiMatchDetail.textContent.includes('정확한 이름 일치로 찾은 선언이며 정식 의미 연결·권한·native 실행 증거가 아닙니다.'))fail('positive lexical activity scope explanation was not rendered');
+const sourceBase='https://github.com/'+catalog.source_repository+'/blob/'+catalog.source_sha+'/';
+const expectedMultiMatchHrefs=[sourceBase+'examples/activity-cardinality-resolution/main.gooo#L29',sourceBase+'examples/metric-meta-program/main.gooo#L20'];
+const actualMultiMatchHrefs=anchors(multiMatchDetail).map(anchor=>anchor.href);
+if(expectedMultiMatchHrefs.some(href=>!actualMultiMatchHrefs.includes(href))||actualMultiMatchHrefs.filter(href=>expectedMultiMatchHrefs.includes(href)).length!==expectedMultiMatchHrefs.length)fail('one-to-many lexical activity anchors did not preserve pinned source path and line');
+const emptyMatchOperation=findButton(uiElements.get('content'),'freeze-assurance-denominator');
+if(!emptyMatchOperation)fail('zero-match assurance operation was not selectable');
+emptyMatchOperation.click();
+const emptyMatchDetail=uiElements.get('detail');
+if(!emptyMatchDetail.textContent.includes('같은 이름의 Gooo 선언 위치')||!emptyMatchDetail.textContent.includes('정확한 이름 일치로 찾은 선언이며 정식 의미 연결·권한·native 실행 증거가 아닙니다.')||!emptyMatchDetail.textContent.includes('동일 이름 lexical activity 없음. name-match source navigation의 빈 상태')||anchors(emptyMatchDetail).length!==0)fail('zero-match assurance lexical activity state or link absence was not rendered');
 navViews.find(button=>button.dataset.view==='assurance').click();
 const assuranceItem=catalog.assurance_obligations[0];
 const assuranceMetricID=assuranceItem.metric_id;
@@ -92,6 +107,11 @@ if(assuranceOperations.some(operation=>typeof operation.id!=='string'||!operatio
 if(metricProgramOperations.some(operation=>typeof operation.id!=='string'||!operation.id)||new Set(metricProgramOperations.map(operation=>operation.id)).size!==metricProgramOperations.length)fail('metric program operation registry contains malformed or duplicate IDs');
 const conceptIDs=new Set((catalog.concepts??[]).map(concept=>concept.id));
 if(catalog.obligations?.length!==24||catalog.obligations.some(obligation=>!conceptIDs.has(obligation.concept_id))||catalog.assurance_obligations?.length!==12||catalog.assurance_obligations.some(obligation=>!assuranceOperationIDs.has(obligation.required_meta_operation)))fail('obligation concept_id or assurance required_meta_operation does not resolve in its exact separate registry');
+const lexicalActivities=catalog.activities??[];
+const activityMatchCount=operation=>lexicalActivities.filter(activity=>activity.name===operation.activity).length;
+const metricProgramMatchCounts=metricProgramOperations.map(activityMatchCount);
+const assuranceMatchCounts=assuranceOperations.map(activityMatchCount);
+if(metricProgramMatchCounts.filter(count=>count===1).length!==8||metricProgramMatchCounts.filter(count=>count===2).length!==1||metricProgramMatchCounts.some(count=>count<1)||metricProgramMatchCounts.reduce((sum,count)=>sum+count,0)!==10||assuranceMatchCounts.some(count=>count!==0))fail('lexical activity source navigation relationship changed');
 if(assuranceOperations.some(operation=>Object.hasOwn(operation,'native_evidence')||Object.hasOwn(operation,'execution_receipt'))||metricProgramOperations.some(operation=>Object.hasOwn(operation,'native_evidence')||Object.hasOwn(operation,'execution_receipt')))fail('operation registry gained native execution fields');
 if(cohort.metric_rows!==1094||cohort.source_call_count!==593||cohort.source_unique_metric_id_count!==574||cohort.metric_rows_with_exact_source_contract!==574||cohort.joined_source_call_count!==593||cohort.joined_unique_metric_id_count!==574||cohort.unjoined_source_call_count!==0)fail('exact source definition join counts are not lossless');
 const metricIDs=new Set(metrics.map(metric=>metric.id));
@@ -122,4 +142,4 @@ if(cohort.candidate_not_promoted_count!==candidateUnboundRows.length||candidateU
 if(cohort.dynamic_prefix_not_promoted_count!==dynamicRows.length||cohort.partial_contracts_not_promoted!==97)fail('non-promoted source candidates are not represented explicitly');
 const preserved={concepts:29,obligations:24,assurance_obligations:12,metric_ids_and_candidates:1094,lexical_activity_declarations:379,source_resolved_calls:593,source_unresolved_calls:97,translation_cohort:47,release_metric_contracts:39,release_complete_formulas:38};
 if(receipt.concepts!==preserved.concepts||receipt.obligations!==preserved.obligations||receipt.assurance_obligations!==preserved.assurance_obligations||receipt.metric_ids_and_candidates!==preserved.metric_ids_and_candidates||receipt.lexical_activity_declarations!==preserved.lexical_activity_declarations||receipt.source_contract_cohort.resolved_symbolic_calls!==preserved.source_resolved_calls||receipt.source_contract_cohort.unresolved_callsites!==preserved.source_unresolved_calls||receipt.metric_translation_cohort.total!==preserved.translation_cohort||receipt.release_metric_cohort.contract_count!==preserved.release_metric_contracts||receipt.release_metric_cohort.complete_formula_count!==preserved.release_complete_formulas)fail('existing atlas cohorts changed');
-console.log(JSON.stringify({schema:'gooo/source-definition-binding-cases/v5',preserved_existing_source_call_count:593,preserved_existing_source_unique_metric_id_count:574,metric_rows:1094,lossless_existing_callsite_multiset:'PASS',multiple_definition_metric_count:11,multiple_definition_callsite_count:30,partial_contracts_not_promoted:97,dynamic_prefix_not_promoted:dynamicRows.length,candidate_rows_with_no_exact_binding:candidateUnboundRows.length,metric_program_operations:9,assurance_operations:14,assurance_required_operation_joins:12,obligation_concept_joins:24,registry_cohorts:'PASS',ui_identity_search_projection:'PASS',ui_presenter_harness:'PASS',native_boundary:'PRESERVED_NOT_OBSERVED',existing_cohorts:'PASS',binding_scope:'SOURCE_DEFINITION_ONLY_NOT_RUNTIME_EVIDENCE',new_definitions:0,new_completion_claim:false}));
+console.log(JSON.stringify({schema:'gooo/source-definition-binding-cases/v6',preserved_existing_source_call_count:593,preserved_existing_source_unique_metric_id_count:574,metric_rows:1094,lossless_existing_callsite_multiset:'PASS',multiple_definition_metric_count:11,multiple_definition_callsite_count:30,partial_contracts_not_promoted:97,dynamic_prefix_not_promoted:dynamicRows.length,candidate_rows_with_no_exact_binding:candidateUnboundRows.length,metric_program_operations:9,assurance_operations:14,assurance_required_operation_joins:12,obligation_concept_joins:24,metric_program_lexical_matches:10,metric_program_one_to_many_operations:1,assurance_lexical_zero_matches:14,registry_cohorts:'PASS',ui_identity_search_projection:'PASS',ui_presenter_harness:'PASS',lexical_source_navigation:'PASS',native_boundary:'PRESERVED_NOT_OBSERVED',existing_cohorts:'PASS',binding_scope:'SOURCE_DEFINITION_ONLY_NOT_RUNTIME_EVIDENCE',new_definitions:0,new_completion_claim:false}));
