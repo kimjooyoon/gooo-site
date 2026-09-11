@@ -7,6 +7,7 @@ import {nativeEvidence,bindNativeEvidence} from './native-evidence.mjs';
 import {validateReleaseMetricBindings} from './release-metric-validator.mjs';
 import {validateSourceReferences} from './source-reference-validation.mjs';
 import {buildToolchainContracts} from './toolchain-contracts-corrected.mjs';
+import {buildSourceExactHelperContractCohort} from './source-exact-helper-contracts.mjs';
 import {languageSemanticFamilySpecs,languageSemanticTranslationCohortIds,projectLanguageSemanticRoleExpressions,validateLanguageSemanticProjection} from './metric-translation-catalog.mjs';
 const [input,template,output,sourceRoot]=process.argv.slice(2);
 if(!sourceRoot)throw Error('sourceRoot is required for source-backed rendering');
@@ -515,6 +516,8 @@ const guidedContract=call=>{const fieldGuides={arguments:annotateFields(call.arg
 const sourceCallsByMetricID=new Map();
 for(const call of sourceCalls){if(typeof call.metric_id!=='string'||!call.metric_id)throw Error('Resolved source contract has no exact metric ID');const calls=sourceCallsByMetricID.get(call.metric_id)??[];calls.push(call);sourceCallsByMetricID.set(call.metric_id,calls);}
 for(const metric of atlas.metrics){const calls=(sourceCallsByMetricID.get(metric.id)??[]).map(guidedContract);metric.source_contracts=calls;metric.source_definition_binding=sourceDefinitionBinding(metric,calls);metric.typed_source_policy=typedSourcePolicyByMetricID.get(metric.id)??null;}
+const sourceExactHelperContracts=buildSourceExactHelperContractCohort(atlas.metrics,atlas.source_sha);
+atlas.source_exact_helper_contracts=sourceExactHelperContracts;
 const autonomyContracts=decorateAutonomyCohort(await buildAutonomyContracts(sourceRoot,atlas.source_sha,atlas.concepts,atlas.metrics));
 atlas.autonomy_contracts=autonomyContracts;
 const autonomyContractByConceptID=new Map(autonomyContracts.contracts.map(contract=>[contract.concept_id,contract]));
