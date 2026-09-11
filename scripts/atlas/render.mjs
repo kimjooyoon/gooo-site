@@ -6,7 +6,7 @@ import {annotateFields,observedFieldVocabulary} from './source-field-guide.mjs';
 import {nativeEvidence,bindNativeEvidence} from './native-evidence.mjs';
 import {validateReleaseMetricBindings} from './release-metric-validator.mjs';
 import {validateSourceReferences} from './source-reference-validation.mjs';
-import {buildToolchainContracts} from './toolchain-contracts.mjs';
+import {buildToolchainContracts} from './toolchain-contracts-corrected.mjs';
 const [input,template,output,sourceRoot]=process.argv.slice(2);
 if(!sourceRoot)throw Error('sourceRoot is required for source-backed rendering');
 function metricTraceability(metric,translation){
