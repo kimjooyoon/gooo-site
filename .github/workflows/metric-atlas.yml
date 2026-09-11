@@ -172,6 +172,16 @@ jobs:
             echo
             echo 'AST fixture test: executed against collectContracts in the disposable upstream source copy'
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify lossless source definition bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/atlas/source-definition-binding-cases.mjs atlas-output/metric-map.html.receipt.json atlas-output/metric-map.html | tee "$RUNNER_TEMP/source-definition-binding-cases.json"
+          {
+            echo
+            echo '## Source definition binding checks'
+            cat "$RUNNER_TEMP/source-definition-binding-cases.json"
+          } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: language-metric-atlas-${{ github.event.pull_request.head.sha || github.sha }}
