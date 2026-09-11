@@ -23,7 +23,9 @@ const unknownState=record=>{
 const requireUnknown=record=>{
   if(unknownState(record)!=='UNKNOWN')fail('partial record was promoted or malformed');
 };
-if(partials.length!==97)fail('partial cohort changed');
+// The immutable-baseline differential gate proves that exactly eight existing
+// integration target callsites left UNKNOWN, without changing the other records.
+if(partials.length!==(97-8))fail('partial cohort differs from baseline minus eight identity resolutions');
 for(const record of partials)requireUnknown(record);
 const referenceKey=reference=>reference.path+'#'+reference.line+'#'+reference.kind;
 const exactReferenceMultiset=(records,references)=>records.map(record=>referenceKey(record.call)).sort().join('\n')===references.map(referenceKey).sort().join('\n');

@@ -1,4 +1,5 @@
 import {readFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
 import * as vm from 'node:vm';
 import {languageSemanticFamilySpecs,languageSemanticTranslationCohortIds,toolchainSemanticTranslationCohortIds} from './metric-translation-catalog.mjs';
 import {sourceExactHelperContractSpecs,sourceExactHelperContractMatches,primarySourceBlockMatches} from './source-exact-helper-contracts.mjs';
@@ -14,6 +15,118 @@ const end=start<0?-1:rendered.indexOf('</script>',start+marker.length);
 if(start<0||end<0)throw Error('rendered atlas data marker is missing');
 const catalog=JSON.parse(rendered.slice(start+marker.length,end));
 const fail=message=>{throw Error(message)};
+const identityBaselinePath=process.argv[4];
+if(!identityBaselinePath)fail('immutable identity baseline HTML path is required');
+const identityBaselineBytes=await readFile(identityBaselinePath);
+const identityBaselineSHA256='883eb55ba3e7951075b16181621f1927113cf949c6651d1a560e89e90ac02e06';
+if(identityBaselineBytes.length!==15557382||createHash('sha256').update(identityBaselineBytes).digest('hex')!==identityBaselineSHA256)fail('immutable identity baseline byte length or digest mismatch');
+const identityBaselineText=identityBaselineBytes.toString('utf8');
+const identityBaselineStart=identityBaselineText.indexOf(marker);
+const identityBaselineEnd=identityBaselineStart<0?-1:identityBaselineText.indexOf('</script>',identityBaselineStart+marker.length);
+if(identityBaselineStart<0||identityBaselineEnd<0||identityBaselineText.indexOf(marker,identityBaselineStart+marker.length)!==-1)fail('immutable baseline JSON payload boundary is missing or ambiguous');
+// Parse the pinned JSON payload only. Never execute the baseline HTML script.
+const identityBaseline=JSON.parse(identityBaselineText.slice(identityBaselineStart+marker.length,identityBaselineEnd));
+const identitySourceSHA='132fb3c8d2a391aa6a5a9ea47d13493b00182e5a';
+const identitySourcePath='internal/meta/integrationprogress/indicators.go';
+const identitySourcePackage='internal/meta/integrationprogress:integrationprogress';
+const identityExpectedRows=[
+  {
+    "line": 5,
+    "id": "gooo.metric.integration-progress.cells-closed.v1"
+  },
+  {
+    "line": 6,
+    "id": "gooo.metric.integration-progress.merges.v1"
+  },
+  {
+    "line": 7,
+    "id": "gooo.metric.integration-progress.evidence-reachable.v1"
+  },
+  {
+    "line": 8,
+    "id": "gooo.metric.integration-progress.evidenced-merges.v1"
+  },
+  {
+    "line": 9,
+    "id": "gooo.metric.integration-progress.unknown-cells.v1"
+  },
+  {
+    "line": 10,
+    "id": "gooo.metric.integration-progress.queue-observation-unknown.v1"
+  },
+  {
+    "line": 11,
+    "id": "gooo.metric.integration-progress.refuted-cells.v1"
+  },
+  {
+    "line": 19,
+    "id": "gooo.metric.integration-progress.repository-writes.v1"
+  }
+];
+const identityCanonical=value=>JSON.stringify((function canonical(item){
+  if(Array.isArray(item))return item.map(canonical);
+  if(item!==null&&typeof item==='object')return Object.fromEntries(Object.keys(item).sort().map(key=>[key,canonical(item[key])]));
+  return item;
+})(value));
+const identitySameMultiset=(left,right)=>identityCanonical(left.map(identityCanonical).sort())===identityCanonical(right.map(identityCanonical).sort());
+const identityCallKey=(source,record)=>identityCanonical([source.source_sha,record.package_scope,record.call.path,record.call.line,record.call.kind]);
+const identityReferenceKey=reference=>identityCanonical([reference.path,reference.line,reference.kind]);
+const identityExpectedKeys=new Set(identityExpectedRows.map(row=>identityCanonical([identitySourceSHA,identitySourcePackage,identitySourcePath,row.line,'indicator_constructor_call'])));
+const identityBaselineInventory=identityBaseline.source_contracts;
+if(identityBaseline.source_sha!==identitySourceSHA||identityBaselineInventory?.source_sha!==identitySourceSHA||identityBaselineInventory.calls?.length!==593||new Set(identityBaselineInventory.calls.map(call=>call.metric_id)).size!==574||identityBaselineInventory.partial_calls?.length!==97||identityBaselineInventory.unresolved_calls?.length!==97||identityBaselineInventory.calls.length+identityBaselineInventory.unresolved_calls.length!==690)fail('immutable identity baseline source or fixed population mismatch');
+const identityExpectedFields={Class:'class',Consumer:'"integration-progress-scorecard"',MetaOperation:'MetaOperation',MetricID:'id',Producer:'"integrationprogress.Evaluate"',ProofChoice:'proof',Relation:'"EQUAL"',Status:'status',Target:'&target',Unit:'unit',Value:'value'};
+const identityResolvedAdditions=identityExpectedRows.map(row=>{
+  const matches=identityBaselineInventory.partial_calls.filter(partial=>identityCallKey(identityBaseline,partial)===identityCanonical([identitySourceSHA,identitySourcePackage,identitySourcePath,row.line,'indicator_constructor_call']));
+  if(matches.length!==1)fail('expected identity coordinate is absent or duplicated in immutable baseline: '+row.line);
+  const partial=matches[0];
+  const helper=partial.helper_candidates?.[0];
+  if(partial.source_sha!==identitySourceSHA||partial.helper_candidates.length!==1||helper.name!=='targetIndicator'||helper.reference.path!==identitySourcePath||helper.reference.line!==23||helper.reference.kind!=='indicator_constructor_definition'||helper.result_field_sets?.length!==1||identityCanonical(helper.result_field_sets[0])!==identityCanonical(identityExpectedFields)||partial.argument_expressions?.id!==JSON.stringify(row.id)||identityCanonical(helper.argument_expressions)!==identityCanonical(partial.argument_expressions))fail('immutable integration target helper or raw identity contract changed: '+row.id);
+  return {metric_id:row.id,package_scope:partial.package_scope,call:partial.call,helper:helper.reference,helper_signature:helper.helper_signature,argument_expressions:partial.argument_expressions,result_field_expressions:helper.result_field_sets[0],resolution:'SYMBOLIC_SOURCE_CONTRACT_NOT_RUNTIME_PROOF'};
+});
+const identityExpectedCallRecords=[...identityBaselineInventory.calls,...identityResolvedAdditions];
+const identityExpectedPartialRecords=identityBaselineInventory.partial_calls.filter(partial=>!identityExpectedKeys.has(identityCallKey(identityBaseline,partial)));
+const identityRemovedReferenceKeys=new Set(identityResolvedAdditions.map(call=>identityReferenceKey(call.call)));
+const identityExpectedUnresolved=identityBaselineInventory.unresolved_calls.filter(ref=>!identityRemovedReferenceKeys.has(identityReferenceKey(ref)));
+const identityExpectedCalls=identityExpectedCallRecords.length;
+const identityExpectedIDs=new Set(identityExpectedCallRecords.map(call=>call.metric_id)).size;
+const identityExpectedPartials=identityExpectedPartialRecords.length;
+const identityVerifyRefinement=current=>{
+  const inventory=current.source_contracts;
+  if(current.source_sha!==identitySourceSHA||!inventory)fail('current identity source head or inventory missing');
+  const rest=({calls,partial_calls,unresolved_calls,...other})=>other;
+  if(identityCanonical(rest(inventory))!==identityCanonical(rest(identityBaselineInventory)))fail('source inventory metadata changed outside identity refinement');
+  if(!identitySameMultiset(inventory.calls,identityExpectedCallRecords))fail('existing source calls changed or newly resolved calls differ from exact eight coordinates');
+  if(!identitySameMultiset(inventory.partial_calls,identityExpectedPartialRecords))fail('remaining partial contracts or UNKNOWN records changed');
+  if(!identitySameMultiset(inventory.unresolved_calls,identityExpectedUnresolved)||inventory.calls.length+inventory.unresolved_calls.length!==690)fail('recognized call population or unresolved reference multiset changed');
+};
+identityVerifyRefinement(catalog);
+const identityCounterexamples=[];
+const identityRejectMutation=(name,mutate)=>{
+  const input=structuredClone({source_sha:catalog.source_sha,source_contracts:catalog.source_contracts});
+  mutate(input.source_contracts);
+  let rejected=false;
+  try {identityVerifyRefinement(input);} catch {rejected=true;}
+  if(!rejected)fail('identity refinement counterexample accepted: '+name);
+  identityCounterexamples.push({name,state:'FAIL_CLOSED'});
+};
+identityRejectMutation('EXISTING_RESOLVED_ID_CHANGED',inventory=>{inventory.calls[0].metric_id+='-changed';});
+identityRejectMutation('NEW_TARGET_EXPRESSION_CHANGED',inventory=>{inventory.calls.find(call=>identityExpectedKeys.has(identityCallKey(catalog,call))).result_field_expressions.Target='target';});
+identityRejectMutation('REMAINING_UNKNOWN_REASON_ERASED',inventory=>{delete inventory.partial_calls[0].unknown.reason;});
+identityRejectMutation('EXTRA_RESOLVED_CALL',inventory=>{inventory.calls.push(structuredClone(inventory.calls[0]));});
+identityRejectMutation('SAME_COUNT_PARTIAL_REPLACEMENT',inventory=>{inventory.partial_calls[1]=structuredClone(inventory.partial_calls[0]);});
+identityRejectMutation('FABRICATED_RUNTIME_EVIDENCE',inventory=>{inventory.calls[0].native_evidence='PASS';});
+const identityRefinementReport={
+  schema:'gooo/source-identity-dependency-refinement/v1',
+  source_sha:identitySourceSHA,
+  baseline:{commit:'fa01006ab1f38dea20cc7fe5f57e81ec617ff5a1',path:'metric-map.html',sha256:identityBaselineSHA256,bytes:identityBaselineBytes.length},
+  before:{resolved_calls:identityBaselineInventory.calls.length,unique_metric_ids:new Set(identityBaselineInventory.calls.map(call=>call.metric_id)).size,partial_calls:identityBaselineInventory.partial_calls.length,recognized_calls:690},
+  after:{resolved_calls:catalog.source_contracts.calls.length,unique_metric_ids:new Set(catalog.source_contracts.calls.map(call=>call.metric_id)).size,partial_calls:catalog.source_contracts.partial_calls.length,recognized_calls:690},
+  newly_resolved:identityResolvedAdditions.map(record=>({callsite_key:identityCallKey(catalog,record),...record})),
+  preserved_existing_call_multiset:'PASS',preserved_remaining_partial_multiset:'PASS',
+  counterexamples:identityCounterexamples,
+  observation_scope:'STATIC_SOURCE_IDENTITY_REFINEMENT_NOT_LANGUAGE_RUNTIME_OR_UTILITY',
+  runtime_improvement:'UNKNOWN_NO_COMPARABLE_RUNTIME_PAIR',new_metric_definitions:0
+};
 const autonomyCounterexamples=[];
 if(!rendered.includes('sourceExactHelperContractDetail(panel,m)')||!rendered.includes('SOURCE_EXACT helper semantic contract')||!rendered.includes('ORIGINAL class')||!rendered.includes('NOT_PRESENT_IN_SOURCE_HELPER')||!rendered.includes('owner-qualified')||!rendered.includes('language execution이나 완전한 control-flow proof가 아닙니다.'))fail('SOURCE_EXACT helper semantic detail projection is missing');
 const requiredUIProjections=['data-view="operations"','function operationDetail(record,registry)','function assuranceDetail(item)','allMetricProgramOperations=atlas.metric_program_operations??[]','allAssuranceOperations=atlas.assurance_operations??[]','item.metric_id,item.metric_id','같은 이름의 Gooo 선언 위치','정확한 이름 일치로 찾은 선언이며 정식 의미 연결·권한·native 실행 증거가 아닙니다.','동일 이름 lexical activity 없음. name-match source navigation의 빈 상태이며 semantic graph binding/authority/native 실행 증거가 아닙니다.','별도 native receipt가 명시적으로 연결될 때만 관측으로 표시합니다.'];
@@ -537,8 +650,8 @@ if(directoryMetricIDs.some(id=>{const record=typedSourcePolicyByMetricID.get(id)
 if(expectedTypedSourcePolicyIDs.some(id=>typedSourcePolicyByMetricID.get(id)?.source_sha!==catalog.source_sha))fail('typed source-policy source head is not exact');
 const cohort=receipt.source_definition_binding_cohort;
 if(!cohort||cohort.schema!=='gooo/source-definition-binding-cohort/v1'||cohort.join_rule!=='metric.id === source_contract.metric_id')fail('source definition binding cohort is missing or changed');
-if(sourceCalls.length!==593||new Set(sourceCalls.map(call=>call.metric_id)).size!==574)fail('source constructor call or unique metric ID cohort changed');
-if(metrics.length!==1094||partialCalls.length!==97)fail('existing metric or partial source contract cohort changed');
+if(sourceCalls.length!==identityExpectedCalls||new Set(sourceCalls.map(call=>call.metric_id)).size!==identityExpectedIDs)fail('source constructor call or unique metric ID cohort changed');
+if(metrics.length!==1094||partialCalls.length!==identityExpectedPartials)fail('existing metric or partial source contract cohort changed');
 if(assuranceOperations.length!==14||metricProgramOperations.length!==9)fail('assurance and metric program registries changed');
 const assuranceOperationIDs=new Set(assuranceOperations.map(operation=>operation.id));
 if(assuranceOperations.some(operation=>typeof operation.id!=='string'||!operation.id)||assuranceOperationIDs.size!==assuranceOperations.length)fail('assurance operation registry contains malformed or duplicate IDs');
@@ -551,7 +664,7 @@ const metricProgramMatchCounts=metricProgramOperations.map(activityMatchCount);
 const assuranceMatchCounts=assuranceOperations.map(activityMatchCount);
 if(metricProgramMatchCounts.filter(count=>count===1).length!==8||metricProgramMatchCounts.filter(count=>count===2).length!==1||metricProgramMatchCounts.some(count=>count<1)||metricProgramMatchCounts.reduce((sum,count)=>sum+count,0)!==10||assuranceMatchCounts.some(count=>count!==0))fail('lexical activity source navigation relationship changed');
 if(assuranceOperations.some(operation=>Object.hasOwn(operation,'native_evidence')||Object.hasOwn(operation,'execution_receipt'))||metricProgramOperations.some(operation=>Object.hasOwn(operation,'native_evidence')||Object.hasOwn(operation,'execution_receipt')))fail('operation registry gained native execution fields');
-if(cohort.metric_rows!==1094||cohort.source_call_count!==593||cohort.source_unique_metric_id_count!==574||cohort.metric_rows_with_exact_source_contract!==574||cohort.joined_source_call_count!==593||cohort.joined_unique_metric_id_count!==574||cohort.unjoined_source_call_count!==0)fail('exact source definition join counts are not lossless');
+if(cohort.metric_rows!==1094||cohort.source_call_count!==identityExpectedCalls||cohort.source_unique_metric_id_count!==identityExpectedIDs||cohort.metric_rows_with_exact_source_contract!==identityExpectedIDs||cohort.joined_source_call_count!==identityExpectedCalls||cohort.joined_unique_metric_id_count!==identityExpectedIDs||cohort.unjoined_source_call_count!==0)fail('exact source definition join counts are not lossless');
 const sourceExactSpecsByKey=new Map(sourceExactHelperContractSpecs.map(spec=>[spec.metric_id+'|'+spec.helper.group+'|'+spec.call_line,spec]));
 const sourceExactKeys=sourceExactHelperRecords.map(record=>record.metric_id+'|'+record.owner.group+'|'+record.callsite.line);
 const sourceExactCohortValid=Boolean(sourceExactHelperCohort)&&
@@ -687,7 +800,7 @@ const flattened=metrics.flatMap(metric=>{
   if(binding.callsite_count===0&&!['NO_EXACT_SOURCE_CONTRACT','DYNAMIC_PREFIX_NOT_CONFIRMED','CANDIDATE_ID_NOT_CONFIRMED'].includes(binding.state))fail('unbound row was promoted for '+metric.id);
   return sourceContracts;
 });
-if(!sameMultiset(sourceCalls,flattened))fail('593 source constructor calls were not preserved as an exact multiset of metric-row callsites');
+if(!sameMultiset(sourceCalls,flattened))fail('Source constructor calls were not preserved as an exact multiset of metric-row callsites');
 const multiDefinitionMetrics=metrics.filter(metric=>metric.source_definition_binding.definition_count>1);
 const multiCallsiteMetrics=metrics.filter(metric=>metric.source_definition_binding.callsite_count>1);
 if(multiDefinitionMetrics.length!==11||multiDefinitionMetrics.reduce((sum,metric)=>sum+metric.source_definition_binding.callsite_count,0)!==30||multiCallsiteMetrics.length!==11)fail('multiple source definitions or callsites were collapsed');
@@ -698,7 +811,7 @@ if(!dynamicRows.length||dynamicRows.some(metric=>metric.source_definition_bindin
 const candidateRows=metrics.filter(metric=>(metric.references??[]).some(reference=>reference.kind==='literal_call_candidate_not_global_identity'));
 const candidateUnboundRows=candidateRows.filter(metric=>metric.source_definition_binding.callsite_count===0);
 if(cohort.candidate_not_promoted_count!==candidateUnboundRows.length||candidateUnboundRows.some(metric=>metric.source_definition_binding.state==='SOURCE_BOUND'||metric.source_definition_binding.exact_metric_id!==null))fail('ID-only candidate rows were promoted to source definitions');
-if(cohort.dynamic_prefix_not_promoted_count!==dynamicRows.length||cohort.partial_contracts_not_promoted!==97)fail('non-promoted source candidates are not represented explicitly');
-const preserved={concepts:29,obligations:24,assurance_obligations:12,metric_ids_and_candidates:1094,lexical_activity_declarations:379,source_resolved_calls:593,source_unresolved_calls:97,translation_cohort:47,release_metric_contracts:39,release_complete_formulas:38};
+if(cohort.dynamic_prefix_not_promoted_count!==dynamicRows.length||cohort.partial_contracts_not_promoted!==identityExpectedPartials)fail('non-promoted source candidates are not represented explicitly');
+const preserved={concepts:29,obligations:24,assurance_obligations:12,metric_ids_and_candidates:1094,lexical_activity_declarations:379,source_resolved_calls:identityExpectedCalls,source_unresolved_calls:identityExpectedPartials,translation_cohort:47,release_metric_contracts:39,release_complete_formulas:38};
 if(receipt.concepts!==preserved.concepts||receipt.obligations!==preserved.obligations||receipt.assurance_obligations!==preserved.assurance_obligations||receipt.metric_ids_and_candidates!==preserved.metric_ids_and_candidates||receipt.lexical_activity_declarations!==preserved.lexical_activity_declarations||receipt.source_contract_cohort.resolved_symbolic_calls!==preserved.source_resolved_calls||receipt.source_contract_cohort.unresolved_callsites!==preserved.source_unresolved_calls||receipt.metric_translation_cohort.total!==preserved.translation_cohort||receipt.release_metric_cohort.contract_count!==preserved.release_metric_contracts||receipt.release_metric_cohort.complete_formula_count!==preserved.release_complete_formulas)fail('existing atlas cohorts changed');
-console.log(JSON.stringify({schema:'gooo/source-definition-binding-cases/v9',preserved_existing_source_call_count:593,preserved_existing_source_unique_metric_id_count:574,metric_rows:1094,lossless_existing_callsite_multiset:'PASS',multiple_definition_metric_count:11,multiple_definition_callsite_count:30,partial_contracts_not_promoted:97,dynamic_prefix_not_promoted:dynamicRows.length,candidate_rows_with_no_exact_binding:candidateUnboundRows.length,metric_program_operations:9,assurance_operations:14,assurance_required_operation_joins:12,obligation_concept_joins:24,metric_program_lexical_matches:10,metric_program_one_to_many_operations:1,assurance_lexical_zero_matches:14,typed_source_policy_dimensions:19,typed_source_policy_exact_metric_joins:19,typed_source_policy_artifact_coverage_rows:8,typed_source_policy_native_boundary:'UNKNOWN_NOT_INGESTED',typed_source_policy_value_formulas:'SOURCE_BACKED_WITH_UNDECLARED_UNITS',typed_source_policy_workflow_branch:'PRESERVED_WITH_WORKFLOW_ROOT_UNKNOWN_BODY',registry_cohorts:'PASS',ui_identity_search_projection:'PASS',ui_presenter_harness:'PASS',lexical_source_navigation:'PASS',native_boundary:'PRESERVED_NOT_OBSERVED',existing_cohorts:'PASS',meta_contracts:'PASS',meta_concepts:6,meta_metric_ids:7,meta_projection_count:8,meta_unknown_indicators:1,meta_source_constructor_joins:'SEPARATE_FROM_CATALOG_JOIN',autonomy_static_rows:43,autonomy_static_unique_ids:43,autonomy_constructor_occurrences:36,autonomy_constructor_unique_ids:36,autonomy_non_constructor_rows:7,autonomy_multiple_callsite_ids:0,autonomy_multiple_definition_ids:0,autonomy_counterexamples:autonomyCounterexamples,meta_counterexamples:metaCounterexamples,toolchain_contracts:'PASS',toolchain_concepts:6,toolchain_metric_ids:148,toolchain_projection_count:148,toolchain_component_counts:{'toolchain-cli':18,'toolchain-format-fix':18,'toolchain-lsp':37,'toolchain-conformance':28,'toolchain-cross-platform-release':39,'toolchain-executable-use-cases':8},toolchain_counterexamples:toolchainCounterexamples,binding_scope:'SOURCE_DEFINITION_ONLY_NOT_RUNTIME_EVIDENCE',source_exact_helper_metric_ids:sourceExactHelperCohort.metric_id_count,source_exact_helper_constructor_occurrences:sourceExactHelperCohort.constructor_occurrence_count,source_exact_helper_owner_counts:sourceExactHelperCohort.owner_counts,source_exact_helper_cross_owner_duplicate_ids:sourceExactHelperCohort.cross_owner_duplicate_ids,source_exact_helper_projection_metadata_counterexamples:sourceExactCounterexamples,source_exact_helper_counterexamples:sourceExactCounterexamples,source_exact_helper_primary_source_input_counterexamples:primarySourceInputCounterexamples,source_exact_helper_native_boundary:sourceExactHelperCohort.native_observation,source_exact_helper_source_bound_metric_id_count:sourceExactHelperCohort.source_bound_metric_id_count,source_exact_helper_canonical_replay_aggregate:{state:canonicalReplayAggregate[0]?.source_definition_binding?.state,callsite_count:canonicalReplayAggregate[0]?.source_definition_binding?.callsite_count,definition_count:canonicalReplayAggregate[0]?.source_definition_binding?.definition_count},source_exact_helper_owner_local_occurrence_count:sourceExactHelperRecords.length,new_definitions:0,new_completion_claim:false}));
+console.log(JSON.stringify({schema:'gooo/source-definition-binding-cases/v10',identity_dependency_refinement:identityRefinementReport,preserved_existing_source_call_count:593,current_source_call_count:identityExpectedCalls,current_source_unique_metric_id_count:identityExpectedIDs,preserved_existing_source_unique_metric_id_count:574,metric_rows:1094,lossless_existing_callsite_multiset:'PASS',multiple_definition_metric_count:11,multiple_definition_callsite_count:30,partial_contracts_not_promoted:identityExpectedPartials,dynamic_prefix_not_promoted:dynamicRows.length,candidate_rows_with_no_exact_binding:candidateUnboundRows.length,metric_program_operations:9,assurance_operations:14,assurance_required_operation_joins:12,obligation_concept_joins:24,metric_program_lexical_matches:10,metric_program_one_to_many_operations:1,assurance_lexical_zero_matches:14,typed_source_policy_dimensions:19,typed_source_policy_exact_metric_joins:19,typed_source_policy_artifact_coverage_rows:8,typed_source_policy_native_boundary:'UNKNOWN_NOT_INGESTED',typed_source_policy_value_formulas:'SOURCE_BACKED_WITH_UNDECLARED_UNITS',typed_source_policy_workflow_branch:'PRESERVED_WITH_WORKFLOW_ROOT_UNKNOWN_BODY',registry_cohorts:'PASS',ui_identity_search_projection:'PASS',ui_presenter_harness:'PASS',lexical_source_navigation:'PASS',native_boundary:'PRESERVED_NOT_OBSERVED',existing_cohorts:'PASS',meta_contracts:'PASS',meta_concepts:6,meta_metric_ids:7,meta_projection_count:8,meta_unknown_indicators:1,meta_source_constructor_joins:'SEPARATE_FROM_CATALOG_JOIN',autonomy_static_rows:43,autonomy_static_unique_ids:43,autonomy_constructor_occurrences:36,autonomy_constructor_unique_ids:36,autonomy_non_constructor_rows:7,autonomy_multiple_callsite_ids:0,autonomy_multiple_definition_ids:0,autonomy_counterexamples:autonomyCounterexamples,meta_counterexamples:metaCounterexamples,toolchain_contracts:'PASS',toolchain_concepts:6,toolchain_metric_ids:148,toolchain_projection_count:148,toolchain_component_counts:{'toolchain-cli':18,'toolchain-format-fix':18,'toolchain-lsp':37,'toolchain-conformance':28,'toolchain-cross-platform-release':39,'toolchain-executable-use-cases':8},toolchain_counterexamples:toolchainCounterexamples,binding_scope:'SOURCE_DEFINITION_ONLY_NOT_RUNTIME_EVIDENCE',source_exact_helper_metric_ids:sourceExactHelperCohort.metric_id_count,source_exact_helper_constructor_occurrences:sourceExactHelperCohort.constructor_occurrence_count,source_exact_helper_owner_counts:sourceExactHelperCohort.owner_counts,source_exact_helper_cross_owner_duplicate_ids:sourceExactHelperCohort.cross_owner_duplicate_ids,source_exact_helper_projection_metadata_counterexamples:sourceExactCounterexamples,source_exact_helper_counterexamples:sourceExactCounterexamples,source_exact_helper_primary_source_input_counterexamples:primarySourceInputCounterexamples,source_exact_helper_native_boundary:sourceExactHelperCohort.native_observation,source_exact_helper_source_bound_metric_id_count:sourceExactHelperCohort.source_bound_metric_id_count,source_exact_helper_canonical_replay_aggregate:{state:canonicalReplayAggregate[0]?.source_definition_binding?.state,callsite_count:canonicalReplayAggregate[0]?.source_definition_binding?.callsite_count,definition_count:canonicalReplayAggregate[0]?.source_definition_binding?.definition_count},source_exact_helper_owner_local_occurrence_count:sourceExactHelperRecords.length,new_definitions:0,new_completion_claim:false}));

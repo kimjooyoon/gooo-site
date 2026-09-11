@@ -32,6 +32,18 @@ jobs:
           go-version: '1.27.0'
           cache: true
           cache-dependency-path: upstream/go.sum
+      - name: Fetch immutable prior map as a data-only identity baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          baseline="$RUNNER_TEMP/metric-atlas-baseline.html"
+          curl --fail --silent --show-error --proto '=https' --tlsv1.2 \
+            --connect-timeout 10 --max-time 90 --retry 2 --retry-max-time 120 \
+            --max-filesize 16000000 \
+            'https://raw.githubusercontent.com/kimjooyoon/gooo-site/fa01006ab1f38dea20cc7fe5f57e81ec617ff5a1/metric-map.html' \
+            --output "$baseline"
+          test "$(wc -c < "$baseline")" -eq 15557382
+          printf '%s  %s\n' '883eb55ba3e7951075b16181621f1927113cf949c6651d1a560e89e90ac02e06' "$baseline" | sha256sum --check --status
       - name: Export existing registries from a disposable source copy
         shell: bash
         run: |
@@ -150,9 +162,9 @@ jobs:
         run: |
           set -euo pipefail
           catalog=atlas-output/catalog.json
-          test "$(jq '.source_contracts.calls | length' "$catalog")" -eq 593
-          test "$(jq '.source_contracts.unresolved_calls | length' "$catalog")" -eq 97
-          test "$(jq '.source_contracts.partial_calls | length' "$catalog")" -eq 97
+          test "$(jq '.source_contracts.calls | length' "$catalog")" -eq $((593 + 8))
+          test "$(jq '.source_contracts.unresolved_calls | length' "$catalog")" -eq $((97 - 8))
+          test "$(jq '.source_contracts.partial_calls | length' "$catalog")" -eq $((97 - 8))
           test "$(jq '.source_contracts.parsed_production_go_files' "$catalog")" -eq 4456
           test "$(jq '.metrics | length' "$catalog")" -eq 1094
           test "$(jq '(.source_contracts.calls | length) + (.source_contracts.unresolved_calls | length)' "$catalog")" -eq 690
@@ -182,7 +194,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/atlas/source-definition-binding-cases.mjs atlas-output/metric-map.html.receipt.json atlas-output/metric-map.html | tee "$RUNNER_TEMP/source-definition-binding-cases.json"
+          node scripts/atlas/source-definition-binding-cases.mjs atlas-output/metric-map.html.receipt.json atlas-output/metric-map.html "$RUNNER_TEMP/metric-atlas-baseline.html" | tee "$RUNNER_TEMP/source-definition-binding-cases.json"
+          cp "$RUNNER_TEMP/source-definition-binding-cases.json" atlas-output/source-definition-binding-cases.json
           {
             echo
             echo '## Source definition binding checks'
