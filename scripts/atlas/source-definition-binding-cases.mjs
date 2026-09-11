@@ -14,7 +14,7 @@ const catalog=JSON.parse(rendered.slice(start+marker.length,end));
 const fail=message=>{throw Error(message)};
 const requiredUIProjections=['data-view="operations"','function operationDetail(record,registry)','function assuranceDetail(item)','allMetricProgramOperations=atlas.metric_program_operations??[]','allAssuranceOperations=atlas.assurance_operations??[]','item.metric_id,item.metric_id','같은 이름의 Gooo 선언 위치','정확한 이름 일치로 찾은 선언이며 정식 의미 연결·권한·native 실행 증거가 아닙니다.','동일 이름 lexical activity 없음. name-match source navigation의 빈 상태이며 semantic graph binding/authority/native 실행 증거가 아닙니다.','별도 native receipt가 명시적으로 연결될 때만 관측으로 표시합니다.'];
 if(requiredUIProjections.some(projection=>!rendered.includes(projection)))fail('existing UI identity, search projection, assurance metric path, or native boundary is missing');
-if(!rendered.includes('typedSourcePolicyDetail(panel,m)')||!rendered.includes('typedSourcePolicyValueDetail(panel,m)')||!rendered.includes('typed source-policy lineage')||!rendered.includes('Indicator·Action identity와 source 경계')||!rendered.includes('실제 값·관측 producer 경계'))fail('typed source-policy metric detail projection is missing');
+if(!rendered.includes('typedSourcePolicyDetail(panel,m)')||!rendered.includes('typedSourcePolicyValueDetail(panel,m)')||!rendered.includes('typed source-policy lineage')||!rendered.includes('Indicator·Action identity와 source 경계')||!rendered.includes('실제 값·관측 producer 경계')||!rendered.includes('SourceIndicator/MetricProducer field copy는 validator·권한 증명이 아닙니다.'))fail('typed source-policy metric detail projection is missing');
 class TestElement{
   constructor(tag){this.tagName=tag.toUpperCase();this.children=[];this.listeners=new Map();this.dataset={};this.style={};this.hidden=false;this.disabled=false;this.value='';this._text='';}
   set textContent(value){this._text=String(value??'');this.children=[];}
@@ -100,7 +100,7 @@ setSearch('gooo.metric.layout.entry-kinds.v1');
 const entryKindsButton=findButton(uiElements.get('content'),'gooo.metric.layout.entry-kinds.v1');
 if(!entryKindsButton)fail('DirectoryKinds source-policy metric was not exposed in metric search');
 entryKindsButton.click();
-if(!uiElements.get('detail').textContent.includes('0/1/2')||!uiElements.get('detail').textContent.includes('직접 파일과 하위 폴더의 존재 종류 수')||!uiElements.get('detail').textContent.includes('Go/Gooo 확장자 종류가 아닙니다.'))fail('DirectoryKinds scope was generalized or mistranslated');
+if(!uiElements.get('detail').textContent.includes('0/1/2')||!uiElements.get('detail').textContent.includes('직접 파일과 하위 폴더의 존재 종류 수')||!uiElements.get('detail').textContent.includes('Go/Gooo 확장자 종류가 아닙니다.')||!uiElements.get('detail').textContent.includes('metricTopologyProducer(report)')||!uiElements.get('detail').textContent.includes('helper 본문은 미확정'))fail('DirectoryKinds scope or producer selection boundary was generalized or mistranslated');
 const normalize=value=>{
   if(Array.isArray(value))return value.map(normalize);
   if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(key=>[key,normalize(value[key])]));
@@ -128,9 +128,11 @@ if(typedSourcePolicyRecords.some(record=>!record.value_ko||!record.unit_ko.inclu
 if(typedSourcePolicyRecords.filter(record=>record.producer.observed_value_source===null).map(record=>record.metric_id).sort().join(',')!=='gooo.metric.conformance.go-fix-delta.v1,gooo.metric.conformance.toolchain.v1')fail('producer source UNKNOWN boundary was changed');
 if(!typedSourcePolicyByMetricID.get('gooo.metric.source.function-lines.v1').policy_conditions.some(condition=>condition.includes('FamilyDuplication')))fail('FunctionLines producer family was generalized incorrectly');
 const directEntriesPolicy=typedSourcePolicyByMetricID.get('gooo.metric.layout.direct-entries.v1');
-if(!directEntriesPolicy.policy_conditions.some(condition=>condition.includes('WorkflowDiscoveryObservationDetail'))||!directEntriesPolicy.policy_conditions.some(condition=>condition.includes('workflowRootDefinition'))||!directEntriesPolicy.operation.includes('OperationPreserveWorkflow')||!directEntriesPolicy.consumer.includes('github-actions'))fail('DirectEntries workflow-root policy branch was omitted');
+if(!directEntriesPolicy.policy_conditions.some(condition=>condition.includes('WorkflowDiscoveryObservationDetail'))||!directEntriesPolicy.policy_conditions.some(condition=>condition.includes('workflowRootDefinition'))||!directEntriesPolicy.meta_operation.includes('OperationPreserveWorkflow')||!directEntriesPolicy.consumer.includes('github-actions'))fail('DirectEntries workflow-root policy branch was omitted');
 const directoryKindsPolicy=typedSourcePolicyByMetricID.get('gooo.metric.layout.entry-kinds.v1');
-if(!directoryKindsPolicy.value_ko.includes('0/1/2')||!directoryKindsPolicy.observation_scope_ko.includes('Go/Gooo 확장자 종류가 아닙니다.'))fail('DirectoryKinds value meaning was generalized incorrectly');
+if(!directoryKindsPolicy.value_ko.includes('0/1/2')||!directoryKindsPolicy.observation_scope_ko.includes('Go/Gooo 확장자 종류가 아닙니다.')||!directoryKindsPolicy.meta_operation.includes('미확정')||directoryKindsPolicy.meta_operation.includes('OperationPreserveWorkflow'))fail('DirectoryKinds value meaning or workflow helper boundary was generalized incorrectly');
+const directoryMetricIDs=['gooo.metric.layout.direct-files.v1','gooo.metric.layout.direct-folders.v1','gooo.metric.layout.recursive-files.v1','gooo.metric.layout.recursive-folders.v1','gooo.metric.layout.direct-entries.v1','gooo.metric.layout.entry-kinds.v1'];
+if(directoryMetricIDs.some(id=>{const record=typedSourcePolicyByMetricID.get(id);return !record.producer.producer_ko.includes('metricTopologyProducer(report)')||!record.producer.observed_value_override_source||!record.producer.observed_value_override_source.path.endsWith('internal/detection/linecaps/stats_part05.go')}))fail('directory producer selection override was not preserved as an UNKNOWN helper boundary');
 if(expectedTypedSourcePolicyIDs.some(id=>typedSourcePolicyByMetricID.get(id)?.source_sha!==catalog.source_sha))fail('typed source-policy source head is not exact');
 const cohort=receipt.source_definition_binding_cohort;
 if(!cohort||cohort.schema!=='gooo/source-definition-binding-cohort/v1'||cohort.join_rule!=='metric.id === source_contract.metric_id')fail('source definition binding cohort is missing or changed');
