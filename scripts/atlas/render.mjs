@@ -20,7 +20,7 @@ function metricTraceability(metric,translation){
   const failure=contracts.length?{stage:'TRANSLATION_GLOSSARY',reason:'TOKEN_NOT_IN_EDITORIAL_DICTIONARY;SOURCE_CONTRACT_SYMBOLIC_ONLY',next_operation:'REVIEW_GLOSSARY_TOKEN_AGAINST_SOURCE_CONTRACT'}:candidate?{stage:'SOURCE_IDENTITY',reason:'LOCAL_OR_LITERAL_CANDIDATE_NOT_GLOBAL_IDENTITY',next_operation:'CONFIRM_GLOBAL_METRIC_ID_AND_SEMANTICS'}:{stage:'SOURCE_IDENTITY',reason:'NO_FORMAL_SOURCE_CONTRACT_OR_RUNTIME_SEMANTIC_EVIDENCE',next_operation:'CONFIRM_REGISTRY_OR_CONSTRUCTOR_BINDING'};
   return {identifier:metric.id,identifier_kind:contracts.length?'SOURCE_METRIC_ID':candidate?'CANDIDATE':'UNCONFIRMED_METRIC_ID',original_label:metric.id,rendered_label:translation.ko,untranslated_tokens:translation.untranslated_tokens,source:references,callsites:contracts.map(contract=>({metric_id:contract.metric_id,package_scope:contract.package_scope,path:contract.call.path,line:contract.call.line,kind:contract.call.kind,helper:contract.helper})),classification,meaning_status:contracts.length?'SOURCE_CONTRACT_SYMBOLIC_NOT_RUNTIME_PROOF':candidate?'CANDIDATE_ID_UNCONFIRMED':'SOURCE_MEANING_OR_ID_UNCONFIRMED',failure_stage:failure.stage,failure_reason:failure.reason,next_operation:failure.next_operation};
 }
-function languageSemanticTranslation(metric,sourceBindings){
+function languageSemanticTranslation(metric,sourceBindings,primaryReferences){
   if(!languageSemanticTranslationCohortIds.includes(metric.id))return null;
   const familyEntry=Object.entries(languageSemanticFamilySpecs).find(([,spec])=>metric.id.startsWith(spec.prefix));
   const familyID=familyEntry?.[0];
@@ -41,7 +41,7 @@ function languageSemanticTranslation(metric,sourceBindings){
   const valueMeaning=family.value_qualifiers?.[suffix]??'원본 value expression의 의미는 source field로만 읽으며 bool·count·unit을 추정하지 않는다.';
   const calculationContext={kind:'FAMILY_READINESS_CONTEXT',expression:family.calculation_expression,denominator_scope:family.calculation_scope,source_evidence:sourceBinding.source_evidence,source_checks:sourceBinding.source_checks,denominator:sourceBinding.denominator,applies_to_metric_id:readinessMetricID};
   const sourceEvidence=[];const seen=new Set();
-  for(const ref of [...(metric.references??[]),...(sourceBinding.source_evidence??[]),contract.call,contract.helper]){if(!ref?.path)continue;const key=ref.path+'#'+(ref.line??'')+'#'+(ref.kind??'');if(seen.has(key))continue;seen.add(key);sourceEvidence.push({...ref});}
+  for(const ref of [...(sourceBinding.source_evidence??[]),...(primaryReferences?.[metric.id]??[])]){if(!ref?.path)continue;const key=ref.path+'#'+(ref.line??'')+'#'+(ref.kind??'');if(seen.has(key))continue;seen.add(key);sourceEvidence.push({...ref});}
   const semantic_contract={class:role('class','argument'),proof_choice:role('proof_choice','argument'),producer:role('producer','result'),consumer:role('consumer','result'),meta_operation:role('meta_operation','result'),metric_id:role('metric_id','result'),resolution_expression:role('resolution','argument'),value_expression:role('value','argument'),target_expression:role('target','argument'),relation_expression:null,satisfied_expression:role('satisfied','result'),denominator_boundary:isReadiness?family.denominator_boundary:'이 row는 family readiness 분모를 사용하지 않는다. source constructor의 value·target field와 자체 target만 보존하며 FAMILY_READINESS_CONTEXT는 이 row의 산술식이 아니다.',unit_boundary:'UNDECLARED_IN_SOURCE · 원본 constructor에 Unit 필드가 없으므로 단위를 추정하지 않는다.',user_path_ko:family.user_path_ko,runtime_observation:family.runtime_observation,value_meaning_ko:valueMeaning,calculation_expression:isReadiness?family.calculation_expression:null,calculation_scope:isReadiness?family.calculation_scope:null,calculation_source_evidence:isReadiness?sourceBinding.source_evidence:[],calculation_context:calculationContext,role_map:family.role_map,role_expressions:roleExpressions,source_argument_expressions:contract.argument_expressions,source_result_field_expressions:contract.result_field_expressions};
   validateLanguageSemanticProjection(metric.id,family,contract,semantic_contract);
   const explanation=family.title+'의 '+titleSuffix+' 기존 metric이다. source constructor의 raw argument와 result field를 explicit role map으로 읽어 class='+semantic_contract.class+', proof='+semantic_contract.proof_choice+', producer='+semantic_contract.producer+', consumer='+semantic_contract.consumer+', meta-operation='+semantic_contract.meta_operation+', value='+semantic_contract.value_expression+', target='+semantic_contract.target_expression+', Satisfied='+semantic_contract.satisfied_expression+'를 보존한다. '+valueMeaning+' '+family.user_path_ko+' '+family.runtime_observation+'은 별도 native receipt가 없음을 뜻한다.';
@@ -296,6 +296,14 @@ async function readLanguageSourceTree(sourceRoot,paths){
   return texts;
 }
 function sourceLineForExpression(text,expression,path){const index=text.indexOf(expression);if(index<0)throw Error('Pinned LANGUAGE source expression is missing: '+path+' '+expression);return text.slice(0,index).split(/\r?\n/).length}
+function resolvePinnedSourceReference(ref,texts){if(!ref?.path)return null;const text=texts[ref.path];if(text===undefined)throw Error('Pinned LANGUAGE primary source is not loaded: '+ref.path);if(!Number.isInteger(ref.line)||ref.line<1)throw Error('Pinned LANGUAGE primary source line is missing: '+ref.path);const line=text.split(/\r?\n/)[ref.line-1];if(typeof line!=='string'||!line.trim())throw Error('Pinned LANGUAGE primary source line is empty: '+ref.path+':'+ref.line);return {...ref,anchor:line.trim()}}
+async function resolveLanguageSemanticPrimaryReferences(sourceRoot,metrics){
+  const referencesByMetric=new Map();const paths=[];
+  for(const metric of metrics.filter(item=>languageSemanticTranslationCohortIds.includes(item.id))){const contract=metric.source_contracts?.[0];if(!contract)throw Error('LANGUAGE semantic metric has no source contract for primary references: '+metric.id);const references=[contract.call,contract.helper].filter(ref=>ref?.path);referencesByMetric.set(metric.id,references);paths.push(...references.map(ref=>ref.path));}
+  const texts=await readLanguageSourceTree(sourceRoot,[...new Set(paths)]);const resolved={};
+  for(const [metricID,references] of referencesByMetric)resolved[metricID]=references.map(ref=>resolvePinnedSourceReference(ref,texts));
+  return resolved;
+}
 async function resolveLanguageSemanticCalculationBindings(sourceRoot){
   const paths=[...new Set(Object.values(languageSemanticFamilySpecs).flatMap(family=>[...(family.calculation_source_refs??[]).map(ref=>ref.path),...(family.calculation_source_checks??[]).map(check=>check.path),family.calculation_denominator.path]))];
   const texts=await readLanguageSourceTree(sourceRoot,paths);
@@ -514,7 +522,8 @@ const sourceDefinitionBindingCohort={schema:'gooo/source-definition-binding-coho
 atlas.source_definition_binding_cohort=sourceDefinitionBindingCohort;
 atlas.source_field_vocabulary=sourceFieldVocabulary;
 const languageSemanticSourceBindings=await resolveLanguageSemanticCalculationBindings(sourceRoot);
-for(const metric of atlas.metrics){const translation=languageSemanticTranslation(metric,languageSemanticSourceBindings)??translateMetric(metric.id);metric.translation={...translation,traceability:(translation.source_backed||translation.untranslated_tokens.length)?metricTraceability(metric,translation):null};}
+const languageSemanticPrimaryReferences=await resolveLanguageSemanticPrimaryReferences(sourceRoot,atlas.metrics);
+for(const metric of atlas.metrics){const translation=languageSemanticTranslation(metric,languageSemanticSourceBindings,languageSemanticPrimaryReferences)??translateMetric(metric.id);metric.translation={...translation,traceability:(translation.source_backed||translation.untranslated_tokens.length)?metricTraceability(metric,translation):null};}
 const untranslatedMetrics=atlas.metrics.filter(metric=>metric.translation.untranslated_tokens.length);
 const untranslatedIDs=untranslatedMetrics.map(metric=>metric.id);
 if(JSON.stringify(untranslatedIDs)!==JSON.stringify(untranslatedCohortIds))throw Error('Untranslated metric cohort changed; update the pinned source-backed cohort explicitly');
