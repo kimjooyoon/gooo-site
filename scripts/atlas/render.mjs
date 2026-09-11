@@ -7,7 +7,7 @@ import {nativeEvidence,bindNativeEvidence} from './native-evidence.mjs';
 import {validateReleaseMetricBindings} from './release-metric-validator.mjs';
 import {validateSourceReferences} from './source-reference-validation.mjs';
 import {buildToolchainContracts} from './toolchain-contracts-corrected.mjs';
-import {languageSemanticFamilySpecs,languageSemanticTranslationCohortIds} from './metric-translation-catalog.mjs';
+import {languageSemanticFamilySpecs,languageSemanticTranslationCohortIds,projectLanguageSemanticRoleExpressions,validateLanguageSemanticProjection} from './metric-translation-catalog.mjs';
 const [input,template,output,sourceRoot]=process.argv.slice(2);
 if(!sourceRoot)throw Error('sourceRoot is required for source-backed rendering');
 function metricTraceability(metric,translation){
@@ -21,28 +21,23 @@ function metricTraceability(metric,translation){
   return {identifier:metric.id,identifier_kind:contracts.length?'SOURCE_METRIC_ID':candidate?'CANDIDATE':'UNCONFIRMED_METRIC_ID',original_label:metric.id,rendered_label:translation.ko,untranslated_tokens:translation.untranslated_tokens,source:references,callsites:contracts.map(contract=>({metric_id:contract.metric_id,package_scope:contract.package_scope,path:contract.call.path,line:contract.call.line,kind:contract.call.kind,helper:contract.helper})),classification,meaning_status:contracts.length?'SOURCE_CONTRACT_SYMBOLIC_NOT_RUNTIME_PROOF':candidate?'CANDIDATE_ID_UNCONFIRMED':'SOURCE_MEANING_OR_ID_UNCONFIRMED',failure_stage:failure.stage,failure_reason:failure.reason,next_operation:failure.next_operation};
 }
 function languageSemanticTranslation(metric){
+  if(!languageSemanticTranslationCohortIds.includes(metric.id))return null;
   const family=Object.values(languageSemanticFamilySpecs).find(spec=>metric.id.startsWith(spec.prefix));
-  if(!family)return null;
-  if(!languageSemanticTranslationCohortIds.includes(metric.id))throw Error('LANGUAGE semantic metric ID escaped the exact cohort: '+metric.id);
+  if(!family)throw Error('LANGUAGE semantic cohort row has no exact family: '+metric.id);
   const suffix=metric.id.slice(family.prefix.length).replace(/\.v1$/,'');
   const titleSuffix=family.labels[suffix];
   if(!titleSuffix)throw Error('LANGUAGE semantic metric has no Korean meaning-map entry: '+metric.id);
   const contracts=metric.source_contracts??[];
   if(contracts.length!==1||contracts[0].metric_id!==metric.id)throw Error('LANGUAGE semantic metric does not have one exact source constructor contract: '+metric.id);
   const contract=contracts[0];
-  const roleExpressions={};
-  for(const [role,mapping] of Object.entries(family.role_map)){
-    const argumentExpression=mapping.argument?contract.argument_expressions?.[mapping.argument]:null;
-    const resultExpression=mapping.result?contract.result_field_expressions?.[mapping.result]:null;
-    if((mapping.argument&&typeof argumentExpression!=='string')||(mapping.result&&typeof resultExpression!=='string'))throw Error('LANGUAGE semantic role is missing from its declared source layer: '+metric.id+' '+role);
-    roleExpressions[role]={argument_field:mapping.argument??null,argument_expression:argumentExpression??null,result_field:mapping.result??null,result_expression:resultExpression??null};
-  }
-  if(roleExpressions.satisfied.result_expression!==family.satisfied_expression)throw Error('LANGUAGE semantic Satisfied expression changed for '+metric.id);
+  const roleExpressions=projectLanguageSemanticRoleExpressions(metric.id,family,contract);
+  const role=(name,layer)=>roleExpressions[name]?.[layer+'_expression'];
+  const valueMeaning=family.value_qualifiers?.[suffix]??'원본 value expression의 의미는 source field로만 읽으며 bool·count·unit을 추정하지 않는다.';
   const sourceEvidence=[];const seen=new Set();
-  for(const ref of [...(metric.references??[]),contract.call,contract.helper]){if(!ref?.path)continue;const key=ref.path+'#'+(ref.line??'')+'#'+(ref.kind??'');if(seen.has(key))continue;seen.add(key);sourceEvidence.push({...ref});}
-  const role=name=>roleExpressions[name].argument_expression??roleExpressions[name].result_expression;
-  const semantic_contract={class:role('class'),proof_choice:role('proof_choice'),producer:role('producer'),consumer:role('consumer'),meta_operation:role('meta_operation'),metric_id:role('metric_id'),value_expression:role('value'),target_expression:role('target'),relation_expression:null,satisfied_expression:role('satisfied'),denominator_boundary:family.denominator_boundary,unit_boundary:'UNDECLARED_IN_SOURCE · 원본 constructor에 Unit 필드가 없으므로 단위를 추정하지 않는다.',user_path_ko:family.user_path_ko,runtime_observation:family.runtime_observation,calculation_expression:roleExpressions.value.argument_expression,calculation_scope:family.calculation_scope,role_map:family.role_map,role_expressions:roleExpressions,source_argument_expressions:contract.argument_expressions,source_result_field_expressions:contract.result_field_expressions,calculation_source_evidence:[contract.call,contract.helper]};
-  const explanation=family.title+'의 '+titleSuffix+' 기존 metric이다. source constructor의 raw argument와 result field를 explicit role map으로 읽어 class='+role('class')+', proof='+role('proof_choice')+', producer='+role('producer')+', consumer='+role('consumer')+', meta-operation='+role('meta_operation')+', value='+role('value')+', target='+role('target')+', Satisfied='+role('satisfied')+'를 보존한다. '+family.user_path_ko+' '+family.runtime_observation+'은 별도 native receipt가 없음을 뜻한다.';
+  for(const ref of [...(metric.references??[]),...(family.calculation_source_refs??[]),contract.call,contract.helper]){if(!ref?.path)continue;const key=ref.path+'#'+(ref.line??'')+'#'+(ref.kind??'');if(seen.has(key))continue;seen.add(key);sourceEvidence.push({...ref});}
+  const semantic_contract={class:role('class','argument'),proof_choice:role('proof_choice','argument'),producer:role('producer','result'),consumer:role('consumer','result'),meta_operation:role('meta_operation','result'),metric_id:role('metric_id','result'),resolution_expression:role('resolution','argument'),value_expression:role('value','argument'),target_expression:role('target','argument'),relation_expression:null,satisfied_expression:role('satisfied','result'),denominator_boundary:family.denominator_boundary,unit_boundary:'UNDECLARED_IN_SOURCE · 원본 constructor에 Unit 필드가 없으므로 단위를 추정하지 않는다.',user_path_ko:family.user_path_ko,runtime_observation:family.runtime_observation,value_meaning_ko:valueMeaning,calculation_expression:family.calculation_expression,calculation_scope:family.calculation_scope,calculation_source_evidence:family.calculation_source_refs,role_map:family.role_map,role_expressions:roleExpressions,source_argument_expressions:contract.argument_expressions,source_result_field_expressions:contract.result_field_expressions};
+  validateLanguageSemanticProjection(metric.id,family,contract,semantic_contract);
+  const explanation=family.title+'의 '+titleSuffix+' 기존 metric이다. source constructor의 raw argument와 result field를 explicit role map으로 읽어 class='+semantic_contract.class+', proof='+semantic_contract.proof_choice+', producer='+semantic_contract.producer+', consumer='+semantic_contract.consumer+', meta-operation='+semantic_contract.meta_operation+', value='+semantic_contract.value_expression+', target='+semantic_contract.target_expression+', Satisfied='+semantic_contract.satisfied_expression+'를 보존한다. '+valueMeaning+' '+family.user_path_ko+' '+family.runtime_observation+'은 별도 native receipt가 없음을 뜻한다.';
   return {ko:family.title+' · '+titleSuffix,untranslated_tokens:[],method:'SOURCE_BACKED_LANGUAGE_SEMANTIC_TRANSLATION',source_backed:{identifier_kind:'EXACT_METRIC_ID',classification:'LANGUAGE_EXISTING_METRIC_SEMANTIC_PROJECTION',title:family.title+' · '+titleSuffix,explanation,source_evidence:sourceEvidence,semantic_state:'SOURCE_EXPLAINED',unknown:null,semantic_contract}};
 }
 function traceabilityRecords(metrics){return metrics.flatMap(metric=>metric.translation?.traceability?[metric.translation.traceability]:[]);}
@@ -520,7 +515,7 @@ const languageSemanticTranslationRecords=traceabilityRecords(languageSemanticMet
 if(languageSemanticTranslationRecords.length!==languageSemanticTranslationCohortIds.length||new Set(languageSemanticTranslationRecords.map(record=>record.identifier)).size!==languageSemanticTranslationRecords.length)throw Error('LANGUAGE semantic translation traceability population mismatch');
 const languageSemanticSourceReferenceValidation=await validateSourceReferences(languageSemanticTranslationRecords,sourceRoot,atlas.source_sha);
 if(languageSemanticSourceReferenceValidation.state!=='SOURCE_HEAD_VALIDATED'||languageSemanticSourceReferenceValidation.validated_records!==languageSemanticTranslationCohortIds.length)throw Error('LANGUAGE semantic translation source references failed: '+JSON.stringify(languageSemanticSourceReferenceValidation));
-const languageSemanticTranslationCohort={schema:'gooo/source-language-metric-semantic-translation-cohort/v1',total:languageSemanticTranslationCohortIds.length,ids:languageSemanticTranslationCohortIds,source_backed_count:languageSemanticSourceReferenceValidation.validated_records,source_reference_state:languageSemanticSourceReferenceValidation.state,source_reference_head:languageSemanticSourceReferenceValidation.source_head_sha,source_reference_validated_references:languageSemanticSourceReferenceValidation.validated_references,scope:'EXACT_EXISTING_LANGUAGE_METRIC_IDS_ADDITIONAL_EXPLANATION_COHORT_NOT_LANGUAGE_COMPLETENESS_DENOMINATOR'};
+const languageSemanticTranslationCohort={schema:'gooo/source-language-metric-semantic-translation-cohort/v1',source_sha:atlas.source_sha,total:languageSemanticTranslationCohortIds.length,ids:languageSemanticTranslationCohortIds,source_backed_count:languageSemanticSourceReferenceValidation.validated_records,source_reference_state:languageSemanticSourceReferenceValidation.state,source_reference_head:languageSemanticSourceReferenceValidation.source_head_sha,source_reference_validated_references:languageSemanticSourceReferenceValidation.validated_references,scope:'EXACT_EXISTING_LANGUAGE_METRIC_IDS_ADDITIONAL_EXPLANATION_COHORT_NOT_LANGUAGE_COMPLETENESS_DENOMINATOR'};
 atlas.language_semantic_translation_records=languageSemanticTranslationRecords;
 atlas.language_semantic_translation_cohort=languageSemanticTranslationCohort;
 atlas.catalog_sha256=createHash('sha256').update(raw).digest('hex');
