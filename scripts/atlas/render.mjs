@@ -516,7 +516,7 @@ const guidedContract=call=>{const fieldGuides={arguments:annotateFields(call.arg
 const sourceCallsByMetricID=new Map();
 for(const call of sourceCalls){if(typeof call.metric_id!=='string'||!call.metric_id)throw Error('Resolved source contract has no exact metric ID');const calls=sourceCallsByMetricID.get(call.metric_id)??[];calls.push(call);sourceCallsByMetricID.set(call.metric_id,calls);}
 for(const metric of atlas.metrics){const calls=(sourceCallsByMetricID.get(metric.id)??[]).map(guidedContract);metric.source_contracts=calls;metric.source_definition_binding=sourceDefinitionBinding(metric,calls);metric.typed_source_policy=typedSourcePolicyByMetricID.get(metric.id)??null;}
-const sourceExactHelperContracts=buildSourceExactHelperContractCohort(atlas.metrics,atlas.source_sha);
+const sourceExactHelperContracts=await buildSourceExactHelperContractCohort(atlas.metrics,atlas.source_sha,sourceRoot);
 atlas.source_exact_helper_contracts=sourceExactHelperContracts;
 const autonomyContracts=decorateAutonomyCohort(await buildAutonomyContracts(sourceRoot,atlas.source_sha,atlas.concepts,atlas.metrics));
 atlas.autonomy_contracts=autonomyContracts;
