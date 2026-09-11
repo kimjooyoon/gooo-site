@@ -28,7 +28,7 @@ class TestElement{
 const uiElements=new Map();
 const uiElement=(id,tag='div')=>{const element=new TestElement(tag);uiElements.set(id,element);return element;};
 const atlasElement=uiElement('atlas-data','script');atlasElement.textContent=rendered.slice(start+marker.length,end);
-for(const id of ['pending','explorer','source','native-evidence','content','pages','detail','search','download'])uiElement(id);
+for(const id of ['pending','explorer','source','native-evidence','content','pages','detail','search','download','count'])uiElement(id);
 const navViews=['map','concepts','metrics','assurance','operations','activities','coverage'].map(view=>{const button=new TestElement('button');button.dataset.view=view;return button;});
 const uiDocument={getElementById:id=>uiElements.get(id),createElement:tag=>new TestElement(tag),querySelectorAll:selector=>selector==='[data-view]'?navViews:[]};
 const uiStart=rendered.indexOf('<script>',end+9);
