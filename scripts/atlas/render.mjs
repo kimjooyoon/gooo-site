@@ -20,22 +20,29 @@ function metricTraceability(metric,translation){
   const failure=contracts.length?{stage:'TRANSLATION_GLOSSARY',reason:'TOKEN_NOT_IN_EDITORIAL_DICTIONARY;SOURCE_CONTRACT_SYMBOLIC_ONLY',next_operation:'REVIEW_GLOSSARY_TOKEN_AGAINST_SOURCE_CONTRACT'}:candidate?{stage:'SOURCE_IDENTITY',reason:'LOCAL_OR_LITERAL_CANDIDATE_NOT_GLOBAL_IDENTITY',next_operation:'CONFIRM_GLOBAL_METRIC_ID_AND_SEMANTICS'}:{stage:'SOURCE_IDENTITY',reason:'NO_FORMAL_SOURCE_CONTRACT_OR_RUNTIME_SEMANTIC_EVIDENCE',next_operation:'CONFIRM_REGISTRY_OR_CONSTRUCTOR_BINDING'};
   return {identifier:metric.id,identifier_kind:contracts.length?'SOURCE_METRIC_ID':candidate?'CANDIDATE':'UNCONFIRMED_METRIC_ID',original_label:metric.id,rendered_label:translation.ko,untranslated_tokens:translation.untranslated_tokens,source:references,callsites:contracts.map(contract=>({metric_id:contract.metric_id,package_scope:contract.package_scope,path:contract.call.path,line:contract.call.line,kind:contract.call.kind,helper:contract.helper})),classification,meaning_status:contracts.length?'SOURCE_CONTRACT_SYMBOLIC_NOT_RUNTIME_PROOF':candidate?'CANDIDATE_ID_UNCONFIRMED':'SOURCE_MEANING_OR_ID_UNCONFIRMED',failure_stage:failure.stage,failure_reason:failure.reason,next_operation:failure.next_operation};
 }
-function languageSemanticTranslation(metric){
+function languageSemanticTranslation(metric,sourceBindings){
   if(!languageSemanticTranslationCohortIds.includes(metric.id))return null;
-  const family=Object.values(languageSemanticFamilySpecs).find(spec=>metric.id.startsWith(spec.prefix));
+  const familyEntry=Object.entries(languageSemanticFamilySpecs).find(([,spec])=>metric.id.startsWith(spec.prefix));
+  const familyID=familyEntry?.[0];
+  const family=familyEntry?.[1];
   if(!family)throw Error('LANGUAGE semantic cohort row has no exact family: '+metric.id);
   const suffix=metric.id.slice(family.prefix.length).replace(/\.v1$/,'');
   const titleSuffix=family.labels[suffix];
   if(!titleSuffix)throw Error('LANGUAGE semantic metric has no Korean meaning-map entry: '+metric.id);
+  const sourceBinding=sourceBindings?.[familyID];
+  if(!sourceBinding)throw Error('LANGUAGE semantic metric has no pinned source calculation binding: '+metric.id);
   const contracts=metric.source_contracts??[];
   if(contracts.length!==1||contracts[0].metric_id!==metric.id)throw Error('LANGUAGE semantic metric does not have one exact source constructor contract: '+metric.id);
   const contract=contracts[0];
   const roleExpressions=projectLanguageSemanticRoleExpressions(metric.id,family,contract);
   const role=(name,layer)=>roleExpressions[name]?.[layer+'_expression'];
+  const readinessMetricID=family.prefix+family.readiness_metric_suffix+'.v1';
+  const isReadiness=metric.id===readinessMetricID;
   const valueMeaning=family.value_qualifiers?.[suffix]??'원본 value expression의 의미는 source field로만 읽으며 bool·count·unit을 추정하지 않는다.';
+  const calculationContext={kind:'FAMILY_READINESS_CONTEXT',expression:family.calculation_expression,denominator_scope:family.calculation_scope,source_evidence:sourceBinding.source_evidence,source_checks:sourceBinding.source_checks,denominator:sourceBinding.denominator,applies_to_metric_id:readinessMetricID};
   const sourceEvidence=[];const seen=new Set();
-  for(const ref of [...(metric.references??[]),...(family.calculation_source_refs??[]),contract.call,contract.helper]){if(!ref?.path)continue;const key=ref.path+'#'+(ref.line??'')+'#'+(ref.kind??'');if(seen.has(key))continue;seen.add(key);sourceEvidence.push({...ref});}
-  const semantic_contract={class:role('class','argument'),proof_choice:role('proof_choice','argument'),producer:role('producer','result'),consumer:role('consumer','result'),meta_operation:role('meta_operation','result'),metric_id:role('metric_id','result'),resolution_expression:role('resolution','argument'),value_expression:role('value','argument'),target_expression:role('target','argument'),relation_expression:null,satisfied_expression:role('satisfied','result'),denominator_boundary:family.denominator_boundary,unit_boundary:'UNDECLARED_IN_SOURCE · 원본 constructor에 Unit 필드가 없으므로 단위를 추정하지 않는다.',user_path_ko:family.user_path_ko,runtime_observation:family.runtime_observation,value_meaning_ko:valueMeaning,calculation_expression:family.calculation_expression,calculation_scope:family.calculation_scope,calculation_source_evidence:family.calculation_source_refs,role_map:family.role_map,role_expressions:roleExpressions,source_argument_expressions:contract.argument_expressions,source_result_field_expressions:contract.result_field_expressions};
+  for(const ref of [...(metric.references??[]),...(sourceBinding.source_evidence??[]),contract.call,contract.helper]){if(!ref?.path)continue;const key=ref.path+'#'+(ref.line??'')+'#'+(ref.kind??'');if(seen.has(key))continue;seen.add(key);sourceEvidence.push({...ref});}
+  const semantic_contract={class:role('class','argument'),proof_choice:role('proof_choice','argument'),producer:role('producer','result'),consumer:role('consumer','result'),meta_operation:role('meta_operation','result'),metric_id:role('metric_id','result'),resolution_expression:role('resolution','argument'),value_expression:role('value','argument'),target_expression:role('target','argument'),relation_expression:null,satisfied_expression:role('satisfied','result'),denominator_boundary:isReadiness?family.denominator_boundary:'이 row는 family readiness 분모를 사용하지 않는다. source constructor의 value·target field와 자체 target만 보존하며 FAMILY_READINESS_CONTEXT는 이 row의 산술식이 아니다.',unit_boundary:'UNDECLARED_IN_SOURCE · 원본 constructor에 Unit 필드가 없으므로 단위를 추정하지 않는다.',user_path_ko:family.user_path_ko,runtime_observation:family.runtime_observation,value_meaning_ko:valueMeaning,calculation_expression:isReadiness?family.calculation_expression:null,calculation_scope:isReadiness?family.calculation_scope:null,calculation_source_evidence:isReadiness?sourceBinding.source_evidence:[],calculation_context:calculationContext,role_map:family.role_map,role_expressions:roleExpressions,source_argument_expressions:contract.argument_expressions,source_result_field_expressions:contract.result_field_expressions};
   validateLanguageSemanticProjection(metric.id,family,contract,semantic_contract);
   const explanation=family.title+'의 '+titleSuffix+' 기존 metric이다. source constructor의 raw argument와 result field를 explicit role map으로 읽어 class='+semantic_contract.class+', proof='+semantic_contract.proof_choice+', producer='+semantic_contract.producer+', consumer='+semantic_contract.consumer+', meta-operation='+semantic_contract.meta_operation+', value='+semantic_contract.value_expression+', target='+semantic_contract.target_expression+', Satisfied='+semantic_contract.satisfied_expression+'를 보존한다. '+valueMeaning+' '+family.user_path_ko+' '+family.runtime_observation+'은 별도 native receipt가 없음을 뜻한다.';
   return {ko:family.title+' · '+titleSuffix,untranslated_tokens:[],method:'SOURCE_BACKED_LANGUAGE_SEMANTIC_TRANSLATION',source_backed:{identifier_kind:'EXACT_METRIC_ID',classification:'LANGUAGE_EXISTING_METRIC_SEMANTIC_PROJECTION',title:family.title+' · '+titleSuffix,explanation,source_evidence:sourceEvidence,semantic_state:'SOURCE_EXPLAINED',unknown:null,semantic_contract}};
@@ -288,6 +295,30 @@ async function readLanguageSourceTree(sourceRoot,paths){
   for(const path of paths)await visit(path);
   return texts;
 }
+function sourceLineForExpression(text,expression,path){const index=text.indexOf(expression);if(index<0)throw Error('Pinned LANGUAGE source expression is missing: '+path+' '+expression);return text.slice(0,index).split(/\r?\n/).length}
+async function resolveLanguageSemanticCalculationBindings(sourceRoot){
+  const paths=[...new Set(Object.values(languageSemanticFamilySpecs).flatMap(family=>[...(family.calculation_source_refs??[]).map(ref=>ref.path),...(family.calculation_source_checks??[]).map(check=>check.path),family.calculation_denominator.path]))];
+  const texts=await readLanguageSourceTree(sourceRoot,paths);
+  const bindings={};
+  for(const [familyID,family] of Object.entries(languageSemanticFamilySpecs)){
+    const sourceEvidence=[];const sourceChecks=[];
+    for(const check of family.calculation_source_checks??[]){
+      const text=texts[check.path];
+      if(text===undefined)throw Error('LANGUAGE semantic calculation source is not loaded: '+check.path);
+      const observedReferences=[];
+      for(const expression of check.required_expressions??[]){const line=sourceLineForExpression(text,expression,check.path);observedReferences.push({path:check.path,line,symbol:expression,anchor:expression,kind:'calculation_source_expression'});sourceEvidence.push({path:check.path,line,symbol:expression,anchor:expression,kind:'calculation_source_expression'});}
+      for(const expression of check.forbidden_expressions??[])if(text.includes(expression))throw Error('LANGUAGE semantic calculation source contains forbidden expression: '+check.path+' '+expression);
+      sourceChecks.push({...check,observed_references:observedReferences,state:'SOURCE_EXPRESSION_ALL_REQUIRED_PRESENT'});
+    }
+    const denominator=family.calculation_denominator;const denominatorText=texts[denominator.path];
+    if(denominatorText===undefined)throw Error('LANGUAGE semantic denominator source is not loaded: '+denominator.path);
+    const actual=sourceInteger(denominatorText,denominator.name,denominator.path);
+    if(actual!==denominator.value)throw Error('Pinned LANGUAGE semantic denominator changed: '+familyID);
+    sourceEvidence.push({path:denominator.path,line:sourceLineForExpression(denominatorText,denominator.name,denominator.path),symbol:denominator.name,anchor:denominator.name,kind:'calculation_denominator'});
+    bindings[familyID]={source_evidence:sourceEvidence,source_checks:sourceChecks,denominator:{...denominator,actual}};
+  }
+  return bindings;
+}
 function countLanguageCorpus(spec,texts){
   if(!spec.corpus)return null;
   const document=JSON.parse(texts[spec.corpus.path]);
@@ -482,7 +513,8 @@ const exactSourceMetricIDs=[...sourceCallsByMetricID.keys()];
 const sourceDefinitionBindingCohort={schema:'gooo/source-definition-binding-cohort/v1',join_rule:'metric.id === source_contract.metric_id',source_contract_property:'metric.source_contracts',metric_rows:atlas.metrics.length,source_call_count:sourceCalls.length,source_unique_metric_id_count:exactSourceMetricIDs.length,metric_rows_with_exact_source_contract:atlas.metrics.filter(metric=>metric.source_definition_binding.callsite_count>0).length,joined_source_call_count:atlas.metrics.reduce((sum,metric)=>sum+metric.source_definition_binding.callsite_count,0),joined_unique_metric_id_count:new Set(atlas.metrics.filter(metric=>metric.source_definition_binding.callsite_count>0).map(metric=>metric.id)).size,unjoined_source_call_count:sourceCalls.filter(call=>!new Set(atlas.metrics.map(metric=>metric.id)).has(call.metric_id)).length,multiple_callsite_metric_count:atlas.metrics.filter(metric=>metric.source_definition_binding.callsite_count>1).length,multiple_callsite_count:atlas.metrics.filter(metric=>metric.source_definition_binding.callsite_count>1).reduce((sum,metric)=>sum+metric.source_definition_binding.callsite_count,0),multiple_definition_metric_count:atlas.metrics.filter(metric=>metric.source_definition_binding.definition_count>1).length,multiple_definition_callsite_count:atlas.metrics.filter(metric=>metric.source_definition_binding.definition_count>1).reduce((sum,metric)=>sum+metric.source_definition_binding.callsite_count,0),partial_contracts_not_promoted:partialContracts.length,dynamic_prefix_not_promoted_count:atlas.metrics.filter(metric=>metric.source_definition_binding.state==='DYNAMIC_PREFIX_NOT_CONFIRMED').length,candidate_not_promoted_count:atlas.metrics.filter(metric=>metric.source_definition_binding.state==='CANDIDATE_ID_NOT_CONFIRMED').length,no_exact_source_contract_count:atlas.metrics.filter(metric=>metric.source_definition_binding.state==='NO_EXACT_SOURCE_CONTRACT').length,definition_grouping:'helper/signature/result shape; not semantic or runtime-value equivalence',scope:'Preserves existing exported source constructor definitions; not new definitions, runtime execution, usefulness, native evidence, or full-language completeness'};
 atlas.source_definition_binding_cohort=sourceDefinitionBindingCohort;
 atlas.source_field_vocabulary=sourceFieldVocabulary;
-for(const metric of atlas.metrics){const translation=languageSemanticTranslation(metric)??translateMetric(metric.id);metric.translation={...translation,traceability:(translation.source_backed||translation.untranslated_tokens.length)?metricTraceability(metric,translation):null};}
+const languageSemanticSourceBindings=await resolveLanguageSemanticCalculationBindings(sourceRoot);
+for(const metric of atlas.metrics){const translation=languageSemanticTranslation(metric,languageSemanticSourceBindings)??translateMetric(metric.id);metric.translation={...translation,traceability:(translation.source_backed||translation.untranslated_tokens.length)?metricTraceability(metric,translation):null};}
 const untranslatedMetrics=atlas.metrics.filter(metric=>metric.translation.untranslated_tokens.length);
 const untranslatedIDs=untranslatedMetrics.map(metric=>metric.id);
 if(JSON.stringify(untranslatedIDs)!==JSON.stringify(untranslatedCohortIds))throw Error('Untranslated metric cohort changed; update the pinned source-backed cohort explicitly');

@@ -28,7 +28,7 @@ export const untranslatedCohortIds=[
 export const languageSemanticFamilySpecs={
   'language-syntax-roundtrip':{
     prefix:'gooo.metric.language.syntax-roundtrip-',
-    title:'언어 · 문법 · 왕복',
+    title:'언어 · 문법 · 왕복',readiness_metric_suffix:'readiness-bps',
     labels:{
       'readiness-bps':'준비도 · 만분율','executed-cases':'실행 사례 수','valid-corpus-files':'유효 corpus 파일 수','invalid-fixtures':'무효 fixture 수',
       'ast-shape-replays':'AST 구조 재실행 수','canonical-byte-replays':'정규 바이트 재실행 수','semantic-hash-replays':'semantic hash 재실행 수',
@@ -41,6 +41,8 @@ export const languageSemanticFamilySpecs={
     calculation_expression:'summary.ReadinessBPS = summary.Satisfied * 10000 / totalCases',
     denominator_token:'60',
     calculation_source_refs:[{path:'internal/meta/languagereadiness/languagesyntax/finish.go',kind:'calculation_summary'},{path:'internal/meta/languagereadiness/languagesyntax/model.go',kind:'calculation_model'},{path:'internal/meta/languagereadiness/languagesyntax/report.go',kind:'calculation_report'},{path:'internal/meta/languagereadiness/languagesyntax/indicators.go',kind:'calculation_constructor'}],
+    calculation_source_checks:[{path:'internal/meta/languagereadiness/languagesyntax/finish.go',required_expressions:['summary.ReadinessBPS = summary.Satisfied * 10_000 / totalCases']},{path:'internal/meta/languagereadiness/languagesyntax/model.go',required_expressions:['totalCases']},{path:'internal/meta/languagereadiness/languagesyntax/report.go',required_expressions:['ReadinessBPS']},{path:'internal/meta/languagereadiness/languagesyntax/indicators.go',required_expressions:['s.ReadinessBPS','totalCases']}],
+    calculation_denominator:{path:'internal/meta/languagereadiness/languagesyntax/model.go',name:'totalCases',value:60},
     value_qualifiers:{'unregistered-gooo.guardrail':'원본 value는 미등록 Gooo 파일 수이며 target 0이다.','missing-registered.guardrail':'원본 value는 등록 누락 파일 수이며 target 0이다.','unresolved.guardrail':'원본 value는 미해결 수이며 target 0이다.','repository-writes.guardrail':'원본 value는 저장소 쓰기 관측값이며 target 0이다.','mutation-authority.guardrail':'원본 value는 변이 권한 관측값이며 target 0이다.','registry-drift.guardrail':'원본 value는 registry drift 관측값이며 target 0이다.'},
     denominator_boundary:'현재 LANGUAGE 문법 source contract의 고정 case population은 60개(VALID 57 + INVALID 3)이다. 각 기존 metric의 value·target 식을 보존하며, 낡은 17+3/20 또는 IMPROVED_13_TO_14_OF_24 문구를 현재 성공으로 정상화하지 않는다.',
     calculation_scope:'source constructor가 전달하는 value·target 표현식과 60개 case population(VALID 57 + INVALID 3)의 경계를 함께 보존한다. native evaluator 실행이나 언어 전체 완료 분모가 아니다.',
@@ -49,7 +51,7 @@ export const languageSemanticFamilySpecs={
   },
   'language-deterministic-query':{
     prefix:'gooo.metric.language.deterministic-query-',
-    title:'언어 · 결정론적 질의',
+    title:'언어 · 결정론적 질의',readiness_metric_suffix:'bps',
     labels:{
       'bps':'준비도 · 만분율','binding-plans':'binding 계획 수','law-plans':'법칙 계획 수','canonical-replays':'정규 재실행 수','permutation-replays':'순열 재실행 수',
       'concept-bindings':'concept binding 수','code-bindings':'code binding 수','metric-bindings':'metric binding 수','use-case-bindings':'use-case binding 수',
@@ -62,6 +64,8 @@ export const languageSemanticFamilySpecs={
     calculation_expression:'summary.ReadinessBPS = summary.Satisfied * 10000 / FixedTotal',
     denominator_token:'32',
     calculation_source_refs:[{path:'internal/meta/languagereadiness/languagedeterministicquery/summary.go',kind:'calculation_summary'},{path:'internal/meta/languagereadiness/languagedeterministicquery/contract.go',kind:'calculation_contract'},{path:'internal/meta/languagereadiness/languagedeterministicquery/report.go',kind:'calculation_report'},{path:'internal/meta/languagereadiness/languagedeterministicquery/indicator.go',kind:'calculation_constructor'}],
+    calculation_source_checks:[{path:'internal/meta/languagereadiness/languagedeterministicquery/summary.go',required_expressions:['summary.ReadinessBPS = summary.Satisfied * 10000 / summary.Total']},{path:'internal/meta/languagereadiness/languagedeterministicquery/contract.go',required_expressions:['FixedTotal']},{path:'internal/meta/languagereadiness/languagedeterministicquery/report.go',required_expressions:['ReadinessBPS']},{path:'internal/meta/languagereadiness/languagedeterministicquery/indicator.go',required_expressions:['summary.ReadinessBPS','FixedTotal']}],
+    calculation_denominator:{path:'internal/meta/languagereadiness/languagedeterministicquery/contract.go',name:'FixedTotal',value:32},
     value_qualifiers:{'not-satisfied.guardrail':'값(0 목표)이며 source가 bool/count 의미를 별도 확정하지 않으므로 수 타입을 추정하지 않는다.','unresolved.guardrail':'값(0 목표)이며 source가 bool/count 의미를 별도 확정하지 않으므로 수 타입을 추정하지 않는다.','registry-drift.guardrail':'값(0 목표)이며 source가 bool/count 의미를 별도 확정하지 않으므로 수 타입을 추정하지 않는다.','candidate-promotions.guardrail':'값(0 목표)이며 source가 bool/count 의미를 별도 확정하지 않으므로 수 타입을 추정하지 않는다.','unknown-acceptances.guardrail':'값(0 목표)이며 source가 bool/count 의미를 별도 확정하지 않으므로 수 타입을 추정하지 않는다.','graph-mutations.guardrail':'값(0 목표)이며 source가 bool/count 의미를 별도 확정하지 않으므로 수 타입을 추정하지 않는다.','effectful-stages.guardrail':'값(0 목표)이며 source가 bool/count 의미를 별도 확정하지 않으므로 수 타입을 추정하지 않는다.','repository-writes.guardrail':'값(0 목표)이며 source가 bool/count 의미를 별도 확정하지 않으므로 수 타입을 추정하지 않는다.','mutation-authorities.guardrail':'값(0 목표)이며 source가 bool/count 의미를 별도 확정하지 않으므로 수 타입을 추정하지 않는다.'},
     denominator_boundary:'현재 LANGUAGE 결정론적 질의 source contract의 고정 case population은 32개(BINDING 28 + LAW 4)이다. canonical 56은 별도 source 선언이며 분모가 아니고, in-memory synthetic graph는 사용자 activity 본문 실행이나 producer truth가 아니다.',
     calculation_scope:'source constructor가 전달하는 value·target 표현식과 32개 case population(BINDING 28 + LAW 4)의 경계를 함께 보존한다. Registry()와 in-memory graph의 선언 binding만 읽으며 사용자 activity 실행은 아니다.',
@@ -70,7 +74,7 @@ export const languageSemanticFamilySpecs={
   },
   'language-package-runtime':{
     prefix:'gooo.metric.language.package-runtime-',
-    title:'언어 · 패키지 · 실행',
+    title:'언어 · 패키지 · 실행',readiness_metric_suffix:'readiness-bps',
     labels:{
       'readiness-bps':'준비도 · 만분율','positive-paths':'정상 경로 수','guardrail-rejections':'guardrail 경계 사례 수','packages':'baseline fixture package 구성 수','sources':'baseline fixture source 구성 수','imports':'baseline fixture import edge 수',
       'initializations':'baseline fixture initialization event 수','entry-bindings':'baseline fixture entry binding 수','semantic-bindings':'baseline fixture semantic binding 수','replays':'runtime image replay 수','order-invariants':'초기화 순서 불변식 수',
@@ -82,15 +86,16 @@ export const languageSemanticFamilySpecs={
     calculation_expression:'summary.ReadinessBPS = summary.Satisfied * 10000 / FixedTotal',
     denominator_token:'18',
     calculation_source_refs:[{path:'internal/meta/languagereadiness/languagepackageruntime/summary.go',kind:'calculation_summary'},{path:'internal/meta/languagereadiness/languagepackageruntime/summary_model.go',kind:'calculation_model'},{path:'internal/meta/languagereadiness/languagepackageruntime/contract.go',kind:'calculation_contract'},{path:'internal/meta/languagereadiness/languagepackageruntime/report.go',kind:'calculation_report'},{path:'internal/meta/languagereadiness/languagepackageruntime/indicators.go',kind:'calculation_constructor'}],
-    value_qualifiers:{'guardrail-rejections':'source가 선언한 8개 GUARDRAIL case 경계의 value이며 invalid-acceptance의 0 target과 다른 값이다.','packages':'baseline fixture 구성의 package 항목 수이며 사용자 프로젝트 package 수가 아니다.','sources':'baseline fixture 구성의 source 항목 수이며 사용자 프로젝트 source 수가 아니다.','imports':'baseline fixture 구성의 import edge 수이며 사용자 프로젝트 import 수가 아니다.','initializations':'baseline fixture 구성의 initialization event 수이며 사용자 프로젝트 실행 횟수가 아니다.','entry-bindings':'baseline fixture 구성의 entry binding 수이며 사용자 프로젝트 진입점 수가 아니다.','semantic-bindings':'baseline fixture 구성의 semantic binding 수이며 사용자 프로젝트 semantic 실행 수가 아니다.','replays':'immutable runtime image replay 관측값이며 Go function body 실행 횟수가 아니다.','order-invariants':'baseline fixture 초기화 순서 불변식 관측값이며 사용자 runtime 성공이 아니다.','unresolved.guardrail':'원본 value는 미해결 수이며 target 0이다.','unknown.guardrail':'원본 value는 unknown 값이며 target 0이다.','invalid-acceptance.guardrail':'원본 value는 잘못 수용된 수이며 target 0이다.','graph-acceptance.guardrail':'값(0 목표)이며 source가 bool/count 의미를 별도 확정하지 않으므로 수 타입을 추정하지 않는다.','source-acceptance.guardrail':'값(0 목표)이며 source가 bool/count 의미를 별도 확정하지 않으므로 수 타입을 추정하지 않는다.','entry-acceptance.guardrail':'값(0 목표)이며 source가 bool/count 의미를 별도 확정하지 않으므로 수 타입을 추정하지 않는다.','effects.guardrail':'원본 value는 효과 관측값이며 target 0이다.'},
-    denominator_boundary:'현재 LANGUAGE 패키지 실행 source contract의 고정 case population은 18개(POSITIVE 10 + GUARDRAIL 8)이다. fixture의 4 packages/5 sources는 사례 fixture 누계이지 사용자 프로젝트 패키지 수가 아니며, Go function body 실행을 뜻하지 않는다.',
+    calculation_source_checks:[{path:'internal/meta/languagereadiness/languagepackageruntime/summary.go',required_expressions:['summary.Satisfied++']},{path:'internal/meta/languagereadiness/languagepackageruntime/summary_model.go',required_expressions:['Satisfied']},{path:'internal/meta/languagereadiness/languagepackageruntime/contract.go',required_expressions:['FixedTotal']},{path:'internal/meta/languagereadiness/languagepackageruntime/report.go',required_expressions:['Summary']},{path:'internal/meta/languagereadiness/languagepackageruntime/indicators.go',required_expressions:['summary.Satisfied*10000/FixedTotal']}],
+    calculation_denominator:{path:'internal/meta/languagereadiness/languagepackageruntime/contract.go',name:'FixedTotal',value:18},
+    value_qualifiers:{'guardrail-rejections':'source가 선언한 8개 GUARDRAIL case 경계의 value이며 invalid-acceptance의 0 target과 다른 값이다.','packages':'10개 positive case에서 반복된 하나의 baseline fixture(4 packages)의 aggregate package 관측이며 사용자 프로젝트 package 수가 아니다.','sources':'10개 positive case에서 반복된 하나의 baseline fixture(5 sources)의 aggregate source 관측이며 사용자 프로젝트 source 수가 아니다.','imports':'baseline fixture를 10개 positive case에서 평가한 aggregate import edge 관측이며 사용자 프로젝트 import 수가 아니다.','initializations':'baseline fixture를 10개 positive case에서 평가한 aggregate initialization event 관측이며 사용자 프로젝트 실행 횟수가 아니다.','entry-bindings':'baseline fixture를 10개 positive case에서 평가한 aggregate entry binding 관측이며 사용자 프로젝트 진입점 수가 아니다.','semantic-bindings':'baseline fixture를 10개 positive case에서 평가한 aggregate semantic binding 관측이며 사용자 프로젝트 semantic 실행 수가 아니다.','replays':'10개 positive case에서의 immutable runtime image replay 관측이며 Go function body 실행 횟수가 아니다.','order-invariants':'10개 positive case에서의 baseline fixture 초기화 순서 불변식 관측이며 사용자 runtime 성공이 아니다.','unresolved.guardrail':'원본 value는 미해결 수이며 target 0이다.','unknown.guardrail':'원본 value는 unknown 값이며 target 0이다.','invalid-acceptance.guardrail':'원본 value는 잘못 수용된 수이며 target 0이다.','graph-acceptance.guardrail':'값(0 목표)이며 source가 bool/count 의미를 별도 확정하지 않으므로 수 타입을 추정하지 않는다.','source-acceptance.guardrail':'값(0 목표)이며 source가 bool/count 의미를 별도 확정하지 않으므로 수 타입을 추정하지 않는다.','entry-acceptance.guardrail':'값(0 목표)이며 source가 bool/count 의미를 별도 확정하지 않으므로 수 타입을 추정하지 않는다.','effects.guardrail':'원본 value는 효과 관측값이며 target 0이다.'},
+    denominator_boundary:'현재 LANGUAGE 패키지 실행 source contract의 고정 case population은 18개(POSITIVE 10 + GUARDRAIL 8)이다. 하나의 baseline fixture가 4 packages/5 sources로 구성되고, 10개 positive case가 그 fixture의 packages=40/sources=50 및 대응하는 imports·initializations·bindings·replays 관측을 누계한다. 이 값들은 사용자 프로젝트 크기나 Go function body 실행을 뜻하지 않는다.',
     calculation_scope:'source constructor가 전달하는 value·target·resolution 식과 18개 case population(POSITIVE 10 + GUARDRAIL 8)의 경계를 함께 보존한다. immutable package image·initialization·entry contract 해석이며 Go runtime 실행은 아니다.',
     user_path_ko:'기존 LANGUAGE 패키지 실행 사용자 경로의 등록 metric이다. package image·import DAG·초기화 event·entry contract를 연결하지만, Go 코드 생성이나 activity 본문 실행 및 native runtime 성공은 확정하지 않는다.',
     runtime_observation:'UNKNOWN_NOT_INGESTED'
   }
 };
 export const languageSemanticTranslationCohortIds=Object.values(languageSemanticFamilySpecs).flatMap(spec=>Object.entries(spec.labels).map(([suffix])=>spec.prefix+suffix+'.v1'));
-const languageSemanticRolePreference={metric_id:'result',class:'argument',proof_choice:'argument',producer:'result',consumer:'result',meta_operation:'result',resolution:'argument',value:'argument',target:'argument',satisfied:'result'};
 export function projectLanguageSemanticRoleExpressions(metricID,family,contract){
   if(!languageSemanticTranslationCohortIds.includes(metricID))return null;
   if(!family||!metricID.startsWith(family.prefix))throw Error('LANGUAGE semantic role projection has no exact family: '+metricID);
@@ -105,11 +110,24 @@ export function projectLanguageSemanticRoleExpressions(metricID,family,contract)
   return roleExpressions;
 }
 export function validateLanguageSemanticProjection(metricID,family,contract,semantic){
-  if(!semantic||contract?.metric_id!==metricID||semantic.runtime_observation!=='UNKNOWN_NOT_INGESTED'||semantic.satisfied_expression!==family.satisfied_expression||semantic.calculation_expression!==family.calculation_expression||typeof semantic.calculation_scope!=='string'||!semantic.calculation_scope.includes(family.denominator_token))throw Error('LANGUAGE semantic projection identity, formula, denominator, or runtime boundary changed: '+metricID);
+  const readinessMetricID=family.prefix+family.readiness_metric_suffix+'.v1';
+  const isReadiness=metricID===readinessMetricID;
+  if(!semantic||contract?.metric_id!==metricID)throw Error('LANGUAGE semantic projection identity changed: '+metricID);
+  if(semantic.runtime_observation!=='UNKNOWN_NOT_INGESTED')throw Error('LANGUAGE semantic projection forged runtime observation: '+metricID);
+  if(semantic.satisfied_expression!==family.satisfied_expression)throw Error('LANGUAGE semantic projection changed Satisfied expression: '+metricID);
+  if(isReadiness){
+    if(semantic.calculation_expression!==family.calculation_expression)throw Error('LANGUAGE semantic projection changed its source calculation expression: '+metricID);
+    if(typeof semantic.calculation_scope!=='string'||!semantic.calculation_scope.includes(family.denominator_token))throw Error('LANGUAGE semantic projection changed its readiness denominator scope: '+metricID);
+    if(!Array.isArray(semantic.calculation_source_evidence)||!semantic.calculation_source_evidence.length)throw Error('LANGUAGE semantic projection has no pinned readiness calculation source evidence: '+metricID);
+  }else{
+    if(semantic.calculation_expression!==null||semantic.calculation_scope!==null||semantic.calculation_source_evidence?.length)throw Error('LANGUAGE count or guardrail row claimed family readiness arithmetic: '+metricID);
+  }
+  if(!semantic.calculation_context||semantic.calculation_context.kind!=='FAMILY_READINESS_CONTEXT'||semantic.calculation_context.expression!==family.calculation_expression||semantic.calculation_context.denominator_scope!==family.calculation_scope||!Array.isArray(semantic.calculation_context.source_evidence)||!semantic.calculation_context.source_evidence.length)throw Error('LANGUAGE family readiness context is missing or changed: '+metricID);
   const roleExpressions=projectLanguageSemanticRoleExpressions(metricID,family,contract);
   if(JSON.stringify(semantic.role_map)!==JSON.stringify(family.role_map)||JSON.stringify(semantic.role_expressions)!==JSON.stringify(roleExpressions)||JSON.stringify(semantic.source_argument_expressions)!==JSON.stringify(contract.argument_expressions)||JSON.stringify(semantic.source_result_field_expressions)!==JSON.stringify(contract.result_field_expressions))throw Error('LANGUAGE semantic projection changed its source role layer: '+metricID);
-  for(const [role,layer] of Object.entries(languageSemanticRolePreference)){const field=role==='value'?'value_expression':role==='target'?'target_expression':role==='satisfied'?'satisfied_expression':role==='metric_id'?'metric_id':role;const expected=roleExpressions[role]?.[layer+'_expression'];if(typeof expected!=='string'||semantic[field]!==expected)throw Error('LANGUAGE semantic projection changed the '+role+' source layer: '+metricID);}
-  if(!Array.isArray(semantic.calculation_source_evidence)||!semantic.calculation_source_evidence.length)throw Error('LANGUAGE semantic projection has no pinned calculation source evidence: '+metricID);
+  const semanticFieldByRole={metric_id:'metric_id',class:'class',proof_choice:'proof_choice',producer:'producer',consumer:'consumer',meta_operation:'meta_operation',resolution:'resolution_expression',value:'value_expression',target:'target_expression',satisfied:'satisfied_expression'};
+  const roleLayerByRole={metric_id:'result',class:'argument',proof_choice:'argument',producer:'result',consumer:'result',meta_operation:'result',resolution:'argument',value:'argument',target:'argument',satisfied:'result'};
+  for(const [role,layer] of Object.entries(roleLayerByRole)){const expected=roleExpressions[role]?.[layer+'_expression'];if(typeof expected!=='string'||semantic[semanticFieldByRole[role]]!==expected)throw Error('LANGUAGE semantic projection changed the '+role+' source layer: '+metricID);}
   return true;
 }
 
