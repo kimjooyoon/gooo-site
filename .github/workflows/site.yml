@@ -17,6 +17,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - name: Test supported document language metadata
+        run: node --test scripts/document-language.test.mjs
       - name: Check structure, build static files and report cost
         run: node scripts/check.mjs
       - name: Test browser to Gooo request boundary
