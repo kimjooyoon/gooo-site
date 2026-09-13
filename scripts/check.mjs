@@ -1,14 +1,16 @@
 import {readFile, readdir, mkdir, copyFile, writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {createHash} from 'node:crypto';
+import {hasSupportedDocumentLanguage} from './document-language.mjs';
 const started = performance.now();
 const pages = (await readdir('.')).filter(name => name.endsWith('.html')).sort();
 const documents = new Map(await Promise.all(pages.map(async name => [name, await readFile(name, 'utf8')])));
 let links = 0;
 for (const [name, html] of documents) {
-  for (const required of ['<!doctype html>', 'name="viewport"', '<title>', '<main', 'id="main"', 'lang="en"']) {
+  for (const required of ['<!doctype html>', 'name="viewport"', '<title>', '<main', 'id="main"']) {
     if (!html.toLowerCase().includes(required.toLowerCase())) throw new Error(`${name}: missing ${required}`);
   }
+  if (!hasSupportedDocumentLanguage(html)) throw new Error(`${name}: root html must declare exactly one supported lang (en or ko)`);
   const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
   if (ids.length !== new Set(ids).size) throw new Error(`${name}: duplicate IDs`);
   for (const [, href] of html.matchAll(/\b(?:href|src)="([^"]+)"/g)) {
